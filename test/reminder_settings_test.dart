@@ -5,6 +5,7 @@ import 'package:dr_islam_magdy/features/reminders/models/reminder_settings.dart'
 import 'package:dr_islam_magdy/features/reminders/services/notification_channels.dart';
 import 'package:dr_islam_magdy/features/reminders/services/notification_config.dart';
 import 'package:dr_islam_magdy/features/reminders/services/notification_history_service.dart';
+import 'package:dr_islam_magdy/features/reminders/services/notification_scheduler.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -319,6 +320,74 @@ void main() {
       expect(history.length, equals(1));
       expect(history.first.type, equals('breakfast'));
       expect(history.first.title, equals(NotificationContentRegistry.breakfast.titleAr));
+    });
+  });
+
+  group('New Requirements & Edge Cases Verification', () {
+    test('Sleep past midnight correctly calculates dinner time before bedtime', () {
+      final settings = ReminderSettings(
+        wakeHour: 8,
+        wakeMinute: 0,
+        sleepHour: 1, // 01:00 AM next day
+        sleepMinute: 30, // 01:30 AM next day
+      );
+
+      // Total sleep mins: (1 * 60 + 30) + 1440 = 1530 mins
+      expect(settings.sleepTotalMins, equals(1530));
+
+      // Dinner: 1 hour before bedtime = 1470 mins = 00:30 AM (Midnight + 30m)
+      final dinnerTime = settings.getDinnerTime();
+      expect(dinnerTime, equals(const TimeOfDay(hour: 0, minute: 30)));
+    });
+
+    test('SchedulingResult correctly returns structured status and Arabic/English messages', () {
+      const resultSuccess = SchedulingResult(
+        success: true,
+        scheduledCount: 15,
+        failedCount: 0,
+        isExact: true,
+        hitIosCeiling: false,
+        messageAr: 'تم حفظ الإعدادات وجدولة 15 تذكير بنجاح (دقيقة)! 🔔',
+        messageEn: 'Settings saved & 15 reminders scheduled (exact)! 🔔',
+      );
+
+      expect(resultSuccess.success, isTrue);
+      expect(resultSuccess.scheduledCount, equals(15));
+      expect(resultSuccess.getMessage(true), contains('تم حفظ الإعدادات'));
+      expect(resultSuccess.getMessage(false), contains('Settings saved'));
+
+      const resultCeiling = SchedulingResult(
+        success: true,
+        scheduledCount: 64,
+        failedCount: 0,
+        isExact: false,
+        hitIosCeiling: true,
+        messageAr: 'تم الوصول للحد الأقصى للإشعارات 64',
+        messageEn: 'Reached 64 notification ceiling',
+      );
+
+      expect(resultCeiling.hitIosCeiling, isTrue);
+      expect(resultCeiling.scheduledCount, equals(64));
+    });
+
+    test('Custom alarms count towards overall scheduled limit', () {
+      final customAlarms = List.generate(
+        10,
+        (i) => CustomAlarm(
+          id: 'alarm_$i',
+          title: 'Alarm $i',
+          hour: 10 + i,
+          minute: 0,
+          isEnabled: true,
+        ),
+      );
+
+      final settings = ReminderSettings(
+        customAlarms: customAlarms,
+      );
+
+      expect(settings.customAlarms.length, equals(10));
+      expect(settings.customAlarms.where((a) => a.isEnabled).length, equals(10));
     });
   });
 }

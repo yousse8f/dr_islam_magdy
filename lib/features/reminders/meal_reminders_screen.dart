@@ -87,11 +87,24 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
 
   Future<void> _applyReminders({bool silent = false}) async {
     setState(() => _isLoading = true);
+    final flowStopwatch = Stopwatch()..start();
 
     try {
-      // Request permissions first
-      final hasPermission = await NotificationService.requestPermissions();
+      // 1. Measure Permission Dialog / Request Duration
+      final permStopwatch = Stopwatch()..start();
+      final hasPermission = await NotificationService.requestPermissions().timeout(
+        const Duration(seconds: 12),
+        onTimeout: () {
+          debugPrint('[Activation Flow] Permission request timed out.');
+          return false;
+        },
+      );
+      permStopwatch.stop();
+      debugPrint('[Activation Flow] Notification permissions result: $hasPermission (took ${permStopwatch.elapsedMilliseconds} ms)');
+
       if (!hasPermission) {
+        _settings.isRunning = false;
+        await _settings.save();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -102,36 +115,70 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
               ),
               backgroundColor: Colors.red.shade600,
               behavior: SnackBarBehavior.floating,
+              action: SnackBarAction(
+                label: widget.isArabic ? 'إعادة المحاولة' : 'Retry',
+                textColor: AppColors.white,
+                onPressed: () => _applyReminders(silent: false),
+              ),
             ),
           );
         }
         return;
       }
 
+      // 2. Measure Settings Save Duration
+      final saveStopwatch = Stopwatch()..start();
       _settings.isRunning = true;
       await _settings.save();
+      saveStopwatch.stop();
+      debugPrint('[Activation Flow] Settings saved in ${saveStopwatch.elapsedMilliseconds} ms.');
 
-      final success = await NotificationService.scheduleReminders(
+      // 3. Measure Schedule Duration & Handle Timeout
+      final scheduleStopwatch = Stopwatch()..start();
+      final result = await NotificationService.scheduleReminders(
         _settings,
         widget.isArabic,
+      ).timeout(
+        const Duration(seconds: 10),
+        onTimeout: () => SchedulingResult(
+          success: false,
+          scheduledCount: 0,
+          failedCount: 1,
+          isExact: true,
+          hitIosCeiling: false,
+          messageAr: 'تأخرت عملية تفعيل المنبهات، يرجى إعادة المحاولة.',
+          messageEn: 'Activation timed out, please retry.',
+        ),
+      );
+      scheduleStopwatch.stop();
+      flowStopwatch.stop();
+
+      debugPrint(
+        '[Activation Flow Summary] Total execution time: ${flowStopwatch.elapsedMilliseconds} ms '
+        '(Permissions: ${permStopwatch.elapsedMilliseconds} ms, Save: ${saveStopwatch.elapsedMilliseconds} ms, '
+        'Schedule: ${scheduleStopwatch.elapsedMilliseconds} ms). Scheduled: ${result.scheduledCount}, Success: ${result.success}.',
       );
 
       if (mounted && !silent) {
+        final message = result.success
+            ? (widget.isArabic ? 'التنبيه شغّال' : 'Reminders Active')
+            : result.getMessage(widget.isArabic);
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              success
-                  ? (widget.isArabic
-                        ? 'تم حفظ الإعدادات وجدولة المنبهات والإشعارات بنجاح! 🔔'
-                        : 'Settings saved & reminders scheduled successfully! 🔔')
-                  : (widget.isArabic
-                        ? 'حدث خطأ أثناء جدولة المنبهات.'
-                        : 'Failed to schedule reminders.'),
-            ),
-            backgroundColor: success
+            content: Text(message),
+            backgroundColor: result.success
                 ? AppColors.forestGreen
-                : Colors.red.shade600,
+                : (result.scheduledCount > 0 ? AppColors.accentOrange : Colors.red.shade600),
             behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+            action: !result.success
+                ? SnackBarAction(
+                    label: widget.isArabic ? 'إعادة المحاولة' : 'Retry',
+                    textColor: AppColors.white,
+                    onPressed: () => _applyReminders(silent: false),
+                  )
+                : null,
           ),
         );
       }
@@ -147,6 +194,11 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
             ),
             backgroundColor: Colors.red.shade600,
             behavior: SnackBarBehavior.floating,
+            action: SnackBarAction(
+              label: widget.isArabic ? 'إعادة المحاولة' : 'Retry',
+              textColor: AppColors.white,
+              onPressed: () => _applyReminders(silent: false),
+            ),
           ),
         );
       }
@@ -159,18 +211,26 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
 
   Future<void> _stopReminders() async {
     setState(() => _isLoading = true);
+    final stopwatch = Stopwatch()..start();
     try {
       _settings.isRunning = false;
       await _settings.save();
-      await NotificationService.cancelAutoReminders();
+      await NotificationService.cancelAutoReminders().timeout(
+        const Duration(seconds: 5),
+        onTimeout: () {
+          debugPrint('[Stop Reminders] cancelAutoReminders timed out.');
+        },
+      );
+      stopwatch.stop();
+      debugPrint('[Stop Reminders] All reminders stopped in ${stopwatch.elapsedMilliseconds} ms.');
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               widget.isArabic
-                  ? 'تم إيقاف جميع المنبهات وإلغاء الإشعارات.'
-                  : 'All reminders stopped & notifications cancelled.',
+                  ? 'التنبيه اتقفل'
+                  : 'Reminders Turned Off',
             ),
             backgroundColor: AppColors.accentOrange,
             behavior: SnackBarBehavior.floating,
@@ -423,10 +483,10 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                               Text(
                                 _settings.isRunning
                                     ? (widget.isArabic
-                                          ? 'المنبهات والإشعارات مفعّلة'
+                                          ? 'التنبيه شغّال'
                                           : 'Reminders Active')
                                     : (widget.isArabic
-                                          ? 'المنبهات متوقفة'
+                                          ? 'التنبيه اتقفل'
                                           : 'Reminders Paused'),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
@@ -443,8 +503,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                                           ? 'تصلك التنبيهات تلقائياً في المواعيد المحسوبة'
                                           : 'Notifications scheduled automatically')
                                     : (widget.isArabic
-                                          ? 'اضغط على زر تفعيل المنبهات للبدء'
-                                          : 'Tap activate button below to start'),
+                                          ? 'اضغط على زر شغل التنبيه للبدء'
+                                          : 'Tap Turn On Reminders to start'),
                                 style: TextStyle(
                                   fontSize: 12,
                                   color: _settings.isRunning
@@ -487,14 +547,14 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       label: Text(
                         _settings.isRunning
                             ? (widget.isArabic
-                                  ? 'إيقاف جميع المنبهات والإشعارات'
-                                  : 'Stop All Reminders')
+                                  ? 'اقفل التنبيه'
+                                  : 'Turn Off Reminders')
                             : (widget.isArabic
-                                  ? 'حفظ وتفعيل المنبهات والإشعارات 🔔'
-                                  : 'Save & Activate Reminders 🔔'),
+                                  ? 'شغل التنبيه'
+                                  : 'Turn On Reminders'),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
-                          fontSize: 14.5,
+                          fontSize: 15,
                         ),
                       ),
                     ),

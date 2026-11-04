@@ -20,6 +20,10 @@
 		A1B2C3022EC3CC0100C636F2 /* motivation_sound.aac in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3022EC3CC0100C636F1 /* motivation_sound.aac */; };
 		A1B2C3032EC3CC0100C636F2 /* snack_sound.aac in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3032EC3CC0100C636F1 /* snack_sound.aac */; };
 		A1B2C3042EC3CC0100C636F2 /* water_sound.aac in Resources */ = {isa = PBXBuildFile; fileRef = A1B2C3042EC3CC0100C636F1 /* water_sound.aac */; };
+		B1B2C3012EC3CC0100C636F2 /* meal_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3012EC3CC0100C636F1 /* meal_sound.wav */; };
+		B1B2C3022EC3CC0100C636F2 /* motivation_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3022EC3CC0100C636F1 /* motivation_sound.wav */; };
+		B1B2C3032EC3CC0100C636F2 /* snack_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3032EC3CC0100C636F1 /* snack_sound.wav */; };
+		B1B2C3042EC3CC0100C636F2 /* water_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3042EC3CC0100C636F1 /* water_sound.wav */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -67,6 +71,10 @@
 		A1B2C3022EC3CC0100C636F1 /* motivation_sound.aac */ = {isa = PBXFileReference; lastKnownFileType = audio.aac; path = motivation_sound.aac; sourceTree = "<group>"; };
 		A1B2C3032EC3CC0100C636F1 /* snack_sound.aac */ = {isa = PBXFileReference; lastKnownFileType = audio.aac; path = snack_sound.aac; sourceTree = "<group>"; };
 		A1B2C3042EC3CC0100C636F1 /* water_sound.aac */ = {isa = PBXFileReference; lastKnownFileType = audio.aac; path = water_sound.aac; sourceTree = "<group>"; };
+		B1B2C3012EC3CC0100C636F1 /* meal_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = meal_sound.wav; sourceTree = "<group>"; };
+		B1B2C3022EC3CC0100C636F1 /* motivation_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = motivation_sound.wav; sourceTree = "<group>"; };
+		B1B2C3032EC3CC0100C636F1 /* snack_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = snack_sound.wav; sourceTree = "<group>"; };
+		B1B2C3042EC3CC0100C636F1 /* water_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = water_sound.wav; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -136,6 +144,10 @@
 				A1B2C3022EC3CC0100C636F1 /* motivation_sound.aac */,
 				A1B2C3032EC3CC0100C636F1 /* snack_sound.aac */,
 				A1B2C3042EC3CC0100C636F1 /* water_sound.aac */,
+				B1B2C3012EC3CC0100C636F1 /* meal_sound.wav */,
+				B1B2C3022EC3CC0100C636F1 /* motivation_sound.wav */,
+				B1B2C3032EC3CC0100C636F1 /* snack_sound.wav */,
+				B1B2C3042EC3CC0100C636F1 /* water_sound.wav */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -245,6 +257,10 @@
 				A1B2C3022EC3CC0100C636F2 /* motivation_sound.aac in Resources */,
 				A1B2C3032EC3CC0100C636F2 /* snack_sound.aac in Resources */,
 				A1B2C3042EC3CC0100C636F2 /* water_sound.aac in Resources */,
+				B1B2C3012EC3CC0100C636F2 /* meal_sound.wav in Resources */,
+				B1B2C3022EC3CC0100C636F2 /* motivation_sound.wav in Resources */,
+				B1B2C3032EC3CC0100C636F2 /* snack_sound.wav in Resources */,
+				B1B2C3042EC3CC0100C636F2 /* water_sound.wav in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

@@ -9,10 +9,11 @@ import 'notification_channels.dart';
 import 'notification_history_service.dart';
 import 'notification_scheduler.dart';
 
-// Re-export NotificationContentRegistry and NotificationTypeData for external callers
+// Re-export NotificationContentRegistry, NotificationTypeData, and SchedulingResult for external callers
 export 'notification_config.dart' show NotificationContentRegistry, NotificationTypeData;
+export 'notification_scheduler.dart' show SchedulingResult;
 
-/// Unified Facade and Manager for local notifications, channels, timezone initialization, and FCM display.
+/// Unified Facade and Manager for local notifications, channels, permissions, and timezone initialization.
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
@@ -76,16 +77,17 @@ class NotificationService {
           debugPrint('[Notification Response] id=${response.id}, payload=${response.payload}');
           if (response.id != null) {
             final id = response.id!;
+            final payload = response.payload ?? '';
 
             // Record confirmed user tap interaction in history
             NotificationHistoryService.recordUserInteraction(
               notificationId: id,
               title: response.notificationResponseType.name,
-              body: response.payload ?? '',
+              body: payload,
             );
 
             // Check if motivation notification was tapped
-            if (id == 1004 || (id >= 1300 && id <= 1399)) {
+            if (id == 1004 || (id >= 1300 && id <= 1399) || payload == 'motivation') {
               _onMotivationNotificationTapped?.call();
             }
           }
@@ -100,17 +102,36 @@ class NotificationService {
     _initialized = true;
   }
 
+  /// Checks if launch payload comes from notification tap on cold boot
+  static Future<NotificationResponse?> getAppLaunchNotificationDetails() async {
+    await init();
+    final details = await _notifications.getNotificationAppLaunchDetails();
+    if (details?.didNotificationLaunchApp == true) {
+      return details?.notificationResponse;
+    }
+    return null;
+  }
+
   /// Requests runtime notification permissions on Android and iOS.
   static Future<bool> requestPermissions() async {
     try {
       await init();
+      bool granted = true;
+
       final androidPlugin = _notifications
           .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin
           >();
       if (androidPlugin != null) {
-        final granted = await androidPlugin.requestNotificationsPermission();
-        if (granted == false) return false;
+        final notifGranted = await androidPlugin.requestNotificationsPermission();
+        if (notifGranted == false) granted = false;
+
+        // Try requesting exact alarms permission on Android 12+ (API 31+)
+        try {
+          await androidPlugin.requestExactAlarmsPermission();
+        } catch (e) {
+          debugPrint('[NotificationService Permission] Exact alarm permission request error/not supported: $e');
+        }
       }
 
       final iosPlugin = _notifications
@@ -118,28 +139,49 @@ class NotificationService {
             IOSFlutterLocalNotificationsPlugin
           >();
       if (iosPlugin != null) {
-        final granted = await iosPlugin.requestPermissions(
+        final iosGranted = await iosPlugin.requestPermissions(
           alert: true,
           badge: true,
           sound: true,
         );
-        if (granted == false) return false;
+        if (iosGranted == false) granted = false;
       }
 
-      return true;
+      return granted;
     } catch (e) {
       debugPrint('Error requesting permissions: $e');
       return true;
     }
   }
 
-  /// Cancels only auto-calculated local system notifications (1000..8999) without calling cancelAll() or touching FCM.
+  /// Checks whether exact alarm permission is granted on Android
+  static Future<bool> checkExactAlarmPermission() async {
+    try {
+      await init();
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        final androidPlugin = _notifications
+            .resolvePlatformSpecificImplementation<
+              AndroidFlutterLocalNotificationsPlugin
+            >();
+        if (androidPlugin != null) {
+          final exactGranted = await androidPlugin.canScheduleExactNotifications();
+          return exactGranted ?? true;
+        }
+      }
+      return true;
+    } catch (e) {
+      debugPrint('[Exact Alarm Check ERROR] $e');
+      return true;
+    }
+  }
+
+  /// Cancels only auto-calculated local system notifications (1000..9999) without calling cancelAll().
   static Future<void> cancelAutoReminders() async {
     await init();
     await NotificationScheduler.cancelAutoReminders(_notifications);
   }
 
-  /// Cancels all notifications (Emergency method - not used during normal updates).
+  /// Cancels all notifications (Emergency method).
   static Future<void> cancelAll() async {
     try {
       await init();
@@ -150,7 +192,7 @@ class NotificationService {
   }
 
   /// Schedules all user meal and optional health reminders based on ReminderSettings.
-  static Future<bool> scheduleReminders(
+  static Future<SchedulingResult> scheduleReminders(
     ReminderSettings settings,
     bool isArabic,
   ) async {
@@ -160,33 +202,6 @@ class NotificationService {
       settings: settings,
       isArabic: isArabic,
     );
-  }
-
-  /// Displays an in-app heads-up notification banner when an FCM message arrives in foreground.
-  /// Uses a dedicated FCM ID range (9000+) and channel to prevent overwriting local scheduled alarms.
-  static Future<void> showForegroundFcmNotification({
-    required String title,
-    required String body,
-  }) async {
-    try {
-      await init();
-      const androidDetails = AndroidNotificationDetails(
-        NotificationChannels.fcmChannelId,
-        'Dr. Islam App Notifications',
-        importance: Importance.max,
-        priority: Priority.high,
-        sound: RawResourceAndroidNotificationSound(NotificationChannels.mealSound),
-      );
-      const details = NotificationDetails(
-        android: androidDetails,
-        iOS: DarwinNotificationDetails(),
-      );
-      final id = 9000 + (DateTime.now().millisecondsSinceEpoch % 100);
-      await _notifications.show(id, title, body, details);
-      debugPrint('[In-App FCM] Foreground notification $id displayed: "$title"');
-    } catch (e) {
-      debugPrint('Error displaying FCM foreground notification: $e');
-    }
   }
 
   /// Plays motivation sound effect once using the motivation channel without leaving a persistent notification.
@@ -201,7 +216,7 @@ class NotificationService {
         sound: RawResourceAndroidNotificationSound(NotificationChannels.motivationSound),
       );
       const iosDetails = DarwinNotificationDetails(
-        sound: 'motivation_sound.aac',
+        sound: 'motivation_sound.wav',
       );
       const details = NotificationDetails(
         android: androidDetails,
@@ -233,8 +248,8 @@ class NotificationService {
         final notificationsEnabled = await androidPlugin.areNotificationsEnabled();
         debugPrint('[Runtime Check] areNotificationsEnabled: $notificationsEnabled');
         try {
-          final exactGranted = await androidPlugin.requestExactAlarmsPermission();
-          debugPrint('[Runtime Check] requestExactAlarmsPermission granted: $exactGranted');
+          final exactGranted = await androidPlugin.canScheduleExactNotifications();
+          debugPrint('[Runtime Check] exactGranted: $exactGranted');
         } catch (e) {
           debugPrint('[Runtime Check exact alarm error]: $e');
         }

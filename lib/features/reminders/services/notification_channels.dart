@@ -9,35 +9,43 @@ class NotificationChannels {
   static const String motivationSound = 'motivation_sound';
   static const String defaultSound = '';
 
-  // Channel IDs - Clean, isolated versioned IDs for Android channel creation
-  static const String mealsChannelId = 'dr_islam_meals_channel_v4';
-  static const String snackChannelId = 'dr_islam_snack_channel_v4';
-  static const String waterChannelId = 'dr_islam_water_channel_v4';
-  static const String motivationChannelId = 'dr_islam_motivation_channel_v4';
-  static const String workoutChannelId = 'dr_islam_workout_channel_v2';
-  static const String vitaminsChannelId = 'dr_islam_vitamins_channel_v2';
-  static const String screenOffChannelId = 'dr_islam_screen_off_channel_v2';
-  static const String eyeRestChannelId = 'dr_islam_eye_rest_channel_v2';
-  static const String fcmChannelId = 'dr_islam_fcm_channel_v1';
+  // Channel IDs - Versioned IDs to force Android OS sound settings migration
+  static const String mealsChannelId = 'dr_islam_meals_channel_v5';
+  static const String snackChannelId = 'dr_islam_snack_channel_v5';
+  static const String waterChannelId = 'dr_islam_water_channel_v5';
+  static const String motivationChannelId = 'dr_islam_motivation_channel_v5';
+  static const String workoutChannelId = 'dr_islam_workout_channel_v3';
+  static const String vitaminsChannelId = 'dr_islam_vitamins_channel_v3';
+  static const String screenOffChannelId = 'dr_islam_screen_off_channel_v3';
+  static const String eyeRestChannelId = 'dr_islam_eye_rest_channel_v3';
 
-  /// Legacy channel IDs that should be cleaned up on update
+  /// Legacy channel IDs to clean up on Android update
   static const List<String> legacyChannelIds = [
     'dr_islam_breakfast_channel_v1',
+    'dr_islam_meals_channel_v4',
     'dr_islam_meals_channel_v3',
     'dr_islam_meals_channel_v2',
     'dr_islam_meals_channel_v1',
+    'dr_islam_snack_channel_v4',
     'dr_islam_snack_channel_v3',
     'dr_islam_snack_channel_v2',
+    'dr_islam_water_channel_v4',
     'dr_islam_water_channel_v3',
     'dr_islam_water_channel_v2',
+    'dr_islam_motivation_channel_v4',
     'dr_islam_motivation_channel_v3',
+    'dr_islam_workout_channel_v2',
     'dr_islam_workout_channel_v1',
+    'dr_islam_vitamins_channel_v2',
     'dr_islam_vitamins_channel_v1',
+    'dr_islam_screen_off_channel_v2',
     'dr_islam_screen_off_channel_v1',
+    'dr_islam_eye_rest_channel_v2',
     'dr_islam_eye_rest_channel_v1',
+    'dr_islam_fcm_channel_v1',
   ];
 
-  /// Creates and verifies all Android notification channels according to exact client sound requirements.
+  /// Deletes legacy Android channels and registers updated channels with exact sound mappings.
   static Future<void> registerAllChannels(
     FlutterLocalNotificationsPlugin notificationsPlugin,
   ) async {
@@ -49,6 +57,13 @@ class NotificationChannels {
     if (androidPlugin == null) return;
 
     try {
+      // 0. Clean up legacy channels to prevent Android sound binding lock
+      for (final legacyId in legacyChannelIds) {
+        try {
+          await androidPlugin.deleteNotificationChannel(legacyId);
+        } catch (_) {}
+      }
+
       // 1. Meals Channel (Breakfast, Lunch, Dinner -> meal_sound)
       await androidPlugin.createNotificationChannel(
         const AndroidNotificationChannel(
@@ -157,21 +172,7 @@ class NotificationChannels {
         ),
       );
 
-      // 9. FCM External Notifications Channel
-      await androidPlugin.createNotificationChannel(
-        const AndroidNotificationChannel(
-          fcmChannelId,
-          'Dr. Islam App Notifications',
-          description: 'Important announcements and clinic updates',
-          importance: Importance.max,
-          playSound: true,
-          sound: RawResourceAndroidNotificationSound(mealSound),
-          enableVibration: true,
-          enableLights: true,
-        ),
-      );
-
-      debugPrint('[NotificationChannels] All notification channels successfully registered.');
+      debugPrint('[NotificationChannels] All notification channels successfully migrated & registered.');
     } catch (e) {
       debugPrint('[NotificationChannels ERROR] Failed registering notification channels: $e');
     }
