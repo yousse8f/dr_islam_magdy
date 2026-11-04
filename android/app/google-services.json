@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "562869901758",
+    "project_id": "drislam-magdy",
+    "storage_bucket": "drislam-magdy.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:562869901758:android:7b72f087b07cd7550c01ef",
+        "android_client_info": {
+          "package_name": "com.example.dr_islam_magdy"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCYuBDDgaedA8_O0GQsmurW53Qi6WTs4o4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -24,38 +24,29 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
   }
 
   Future<void> _loadSettings() async {
-    final settings = await ReminderSettings.load();
-    if (mounted) {
-      setState(() {
-        _settings = settings;
-        _isLoading = false;
-      });
+    try {
+      final settings = await ReminderSettings.load();
+      if (mounted) {
+        setState(() {
+          _settings = settings;
+        });
+      }
+    } catch (e) {
+      debugPrint('Error loading reminder settings: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  Future<void> _pickTime({
-    required bool isWake,
-    bool isWorkout = false,
-    bool isVitamins = false,
-  }) async {
-    int initialHour = 7;
-    int initialMinute = 0;
-
-    if (isWake) {
-      initialHour = _settings.wakeHour;
-      initialMinute = _settings.wakeMinute;
-    } else if (isWorkout) {
-      initialHour = _settings.workoutHour;
-      initialMinute = _settings.workoutMinute;
-    } else if (isVitamins) {
-      initialHour = _settings.vitaminsHour;
-      initialMinute = _settings.vitaminsMinute;
-    } else {
-      initialHour = _settings.sleepHour;
-      initialMinute = _settings.sleepMinute;
-    }
-
-    final initialTime = TimeOfDay(hour: initialHour, minute: initialMinute);
+  Future<void> _pickTime({required bool isWake}) async {
+    final initialTime = TimeOfDay(
+      hour: isWake ? _settings.wakeHour : _settings.sleepHour,
+      minute: isWake ? _settings.wakeMinute : _settings.sleepMinute,
+    );
 
     final picked = await showTimePicker(
       context: context,
@@ -80,110 +71,298 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
         if (isWake) {
           _settings.wakeHour = picked.hour;
           _settings.wakeMinute = picked.minute;
-        } else if (isWorkout) {
-          _settings.workoutHour = picked.hour;
-          _settings.workoutMinute = picked.minute;
-        } else if (isVitamins) {
-          _settings.vitaminsHour = picked.hour;
-          _settings.vitaminsMinute = picked.minute;
         } else {
           _settings.sleepHour = picked.hour;
           _settings.sleepMinute = picked.minute;
         }
       });
       await _settings.save();
+
+      // Automatically recalculate and apply if running
       if (_settings.isRunning) {
-        await _applyReminders();
+        await _applyReminders(silent: true);
       }
     }
   }
 
-  Future<void> _applyReminders() async {
+  Future<void> _applyReminders({bool silent = false}) async {
     setState(() => _isLoading = true);
 
-    // Request permission first
-    final hasPermission = await NotificationService.requestPermissions();
-    if (!hasPermission) {
+    try {
+      // Request permissions first
+      final hasPermission = await NotificationService.requestPermissions();
+      if (!hasPermission) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.isArabic
+                    ? 'يرجى السماح بإرسال الإشعارات من إعدادات الهاتف لتفعيل المنبهات.'
+                    : 'Please allow notification permissions in settings to enable alarms.',
+              ),
+              backgroundColor: Colors.red.shade600,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+        return;
+      }
+
+      _settings.isRunning = true;
+      await _settings.save();
+
+      final success = await NotificationService.scheduleReminders(
+        _settings,
+        widget.isArabic,
+      );
+
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success
+                  ? (widget.isArabic
+                        ? 'تم حفظ الإعدادات وجدولة المنبهات والإشعارات بنجاح! 🔔'
+                        : 'Settings saved & reminders scheduled successfully! 🔔')
+                  : (widget.isArabic
+                        ? 'حدث خطأ أثناء جدولة المنبهات.'
+                        : 'Failed to schedule reminders.'),
+            ),
+            backgroundColor: success
+                ? AppColors.forestGreen
+                : Colors.red.shade600,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error in _applyReminders: $e');
       if (mounted) {
-        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
               widget.isArabic
-                  ? 'يرجى السماح بإرسال الإشعارات من إعدادات الهاتف لتفعيل المنبهات.'
-                  : 'Please allow notifications in phone settings to enable reminders.',
+                  ? 'حدث خطأ غير متوقع أثناء تفعيل المنبهات.'
+                  : 'An unexpected error occurred while activating reminders.',
             ),
             backgroundColor: Colors.red.shade600,
             behavior: SnackBarBehavior.floating,
           ),
         );
       }
-      return;
-    }
-
-    _settings.isRunning = true;
-    await _settings.save();
-
-    final success = await NotificationService.scheduleReminders(
-      _settings,
-      widget.isArabic,
-    );
-
-    if (mounted) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success
-                ? (widget.isArabic
-                      ? 'تم تشغيل وتفعيل المنبهات والإشعارات بنجاح! 🔔'
-                      : 'Reminders activated successfully! 🔔')
-                : (widget.isArabic
-                      ? 'حدث خطأ أثناء جدولة المنبهات.'
-                      : 'Error scheduling reminders.'),
-          ),
-          backgroundColor: success
-              ? AppColors.forestGreen
-              : Colors.red.shade600,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _stopReminders() async {
     setState(() => _isLoading = true);
-    _settings.isRunning = false;
-    await _settings.save();
-    await NotificationService.cancelAll();
+    try {
+      _settings.isRunning = false;
+      await _settings.save();
+      await NotificationService.cancelAutoReminders();
 
-    if (mounted) {
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            widget.isArabic
-                ? 'تم إيقاف جميع المنبهات وإلغاء إشعاراتها.'
-                : 'All reminders stopped and notifications cancelled.',
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isArabic
+                  ? 'تم إيقاف جميع المنبهات وإلغاء الإشعارات.'
+                  : 'All reminders stopped & notifications cancelled.',
+            ),
+            backgroundColor: AppColors.accentOrange,
+            behavior: SnackBarBehavior.floating,
           ),
-          backgroundColor: AppColors.accentOrange,
-          behavior: SnackBarBehavior.floating,
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      debugPrint('Error in _stopReminders: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
-  String _formatTime(int hour, int minute) {
-    final h = hour % 12 == 0 ? 12 : hour % 12;
-    final m = minute.toString().padLeft(2, '0');
-    final period = hour >= 12
+  String _formatTimeOfDay(TimeOfDay time) {
+    final h = time.hour % 12 == 0 ? 12 : time.hour % 12;
+    final m = time.minute.toString().padLeft(2, '0');
+    final period = time.hour >= 12
         ? (widget.isArabic ? 'مساءً' : 'PM')
         : (widget.isArabic ? 'صباحاً' : 'AM');
     return '$h:$m $period';
   }
 
+  String _formatHourMinute(int hour, int minute) {
+    return _formatTimeOfDay(TimeOfDay(hour: hour, minute: minute));
+  }
+
+  // --- CUSTOM ALARMS METHODS ---
+  Future<void> _showCustomAlarmDialog({CustomAlarm? alarmToEdit}) async {
+    final isEditing = alarmToEdit != null;
+    final titleController = TextEditingController(
+      text: isEditing ? alarmToEdit.title : '',
+    );
+    TimeOfDay selectedTime = isEditing
+        ? TimeOfDay(hour: alarmToEdit.hour, minute: alarmToEdit.minute)
+        : const TimeOfDay(hour: 12, minute: 0);
+
+    await showDialog(
+      context: context,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppColors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              title: Text(
+                isEditing
+                    ? (widget.isArabic ? 'تعديل التنبيه المخصص' : 'Edit Custom Alarm')
+                    : (widget.isArabic ? 'إضافة تنبيه مخصص جديد' : 'Add Custom Alarm'),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 18,
+                  color: AppColors.textDark,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      decoration: InputDecoration(
+                        labelText: widget.isArabic
+                            ? 'اسم التنبيه (مثال: الشاي الأخضر، المشي...)'
+                            : 'Alarm Name (e.g. Green Tea, Walk)',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ListTile(
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        side: BorderSide(color: Colors.grey.shade300),
+                      ),
+                      title: Text(
+                        widget.isArabic ? 'وقت التنبيه' : 'Alarm Time',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: Text(
+                        _formatTimeOfDay(selectedTime),
+                        style: const TextStyle(
+                          color: AppColors.forestGreen,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      trailing: const Icon(
+                        Icons.access_time_rounded,
+                        color: AppColors.forestGreen,
+                      ),
+                      onTap: () async {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: selectedTime,
+                        );
+                        if (picked != null) {
+                          setDialogState(() {
+                            selectedTime = picked;
+                          });
+                        }
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(
+                    widget.isArabic ? 'إلغاء' : 'Cancel',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                ),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.forestGreen,
+                    foregroundColor: AppColors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  onPressed: () async {
+                    final title = titleController.text.trim();
+                    if (title.isEmpty) return;
+
+                    setState(() {
+                      if (isEditing) {
+                        alarmToEdit.title = title;
+                        alarmToEdit.hour = selectedTime.hour;
+                        alarmToEdit.minute = selectedTime.minute;
+                      } else {
+                        _settings.customAlarms.add(
+                          CustomAlarm(
+                            id: DateTime.now().millisecondsSinceEpoch.toString(),
+                            title: title,
+                            hour: selectedTime.hour,
+                            minute: selectedTime.minute,
+                          ),
+                        );
+                      }
+                    });
+
+                    await _settings.save();
+                    if (context.mounted) Navigator.pop(context);
+
+                    if (_settings.isRunning) {
+                      await _applyReminders(silent: true);
+                    }
+                  },
+                  child: Text(
+                    isEditing
+                        ? (widget.isArabic ? 'حفظ' : 'Save')
+                        : (widget.isArabic ? 'إضافة' : 'Add'),
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _deleteCustomAlarm(CustomAlarm alarm) async {
+    setState(() {
+      _settings.customAlarms.removeWhere((a) => a.id == alarm.id);
+    });
+    await _settings.save();
+    if (_settings.isRunning) {
+      await _applyReminders(silent: true);
+    }
+  }
+
+  Future<void> _toggleCustomAlarm(CustomAlarm alarm, bool enabled) async {
+    setState(() {
+      alarm.isEnabled = enabled;
+    });
+    await _settings.save();
+    if (_settings.isRunning) {
+      await _applyReminders(silent: true);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
+    final conflictMsg = _settings.getScheduleConflictMessage(widget.isArabic);
+
     return Directionality(
       textDirection: widget.isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
@@ -202,9 +381,9 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                 child: CircularProgressIndicator(color: AppColors.forestGreen),
               )
             : ListView(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 children: [
-                  // Status Banner Card
+                  // 1. Status Banner Card
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
@@ -245,10 +424,10 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                                 _settings.isRunning
                                     ? (widget.isArabic
                                           ? 'المنبهات والإشعارات مفعّلة'
-                                          : 'Reminders & Notifications Active')
+                                          : 'Reminders Active')
                                     : (widget.isArabic
                                           ? 'المنبهات متوقفة'
-                                          : 'Reminders are Paused'),
+                                          : 'Reminders Paused'),
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
                                   fontSize: 16,
@@ -261,13 +440,13 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                               Text(
                                 _settings.isRunning
                                     ? (widget.isArabic
-                                          ? 'تصلك الإشعارات في المواعيد المحددة بدقة'
-                                          : 'Notifications will arrive at scheduled times')
+                                          ? 'تصلك التنبيهات تلقائياً في المواعيد المحسوبة'
+                                          : 'Notifications scheduled automatically')
                                     : (widget.isArabic
-                                          ? 'اضغط على زر تشغيل المنبهات أدناه للبدء'
+                                          ? 'اضغط على زر تفعيل المنبهات للبدء'
                                           : 'Tap activate button below to start'),
                                 style: TextStyle(
-                                  fontSize: 12.5,
+                                  fontSize: 12,
                                   color: _settings.isRunning
                                       ? AppColors.white.withValues(alpha: 0.85)
                                       : AppColors.mutedText,
@@ -282,14 +461,14 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
 
                   const SizedBox(height: 16),
 
-                  // Start / Stop Main Toggle Button
+                  // 2. Start / Stop Button
                   SizedBox(
                     width: double.infinity,
                     height: 50,
                     child: ElevatedButton.icon(
                       onPressed: _settings.isRunning
                           ? _stopReminders
-                          : _applyReminders,
+                          : () => _applyReminders(silent: false),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _settings.isRunning
                             ? Colors.red.shade700
@@ -311,8 +490,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                                   ? 'إيقاف جميع المنبهات والإشعارات'
                                   : 'Stop All Reminders')
                             : (widget.isArabic
-                                  ? 'تشغيل وتفعيل المنبهات والإشعارات 🔔'
-                                  : 'Activate Reminders & Notifications 🔔'),
+                                  ? 'حفظ وتفعيل المنبهات والإشعارات 🔔'
+                                  : 'Save & Activate Reminders 🔔'),
                         style: const TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 14.5,
@@ -321,20 +500,53 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     ),
                   ),
 
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
-                  // Sleep & Wake Time Section
+                  // Schedule Conflict Warning Card (if any)
+                  if (conflictMsg != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFEF2F2),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFCA5A5)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.red,
+                            size: 24,
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              conflictMsg,
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                color: Color(0xFF991B1B),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+
+                  // 3. Wake & Sleep Inputs
                   Text(
                     widget.isArabic
-                        ? 'فترة الاستيقاظ والنشاط'
-                        : 'Wake & Sleep Period',
+                        ? 'مواعيد الاستيقاظ والنوم'
+                        : 'Wake & Sleep Hours',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textDark,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 8),
                   Container(
                     decoration: BoxDecoration(
                       color: AppColors.white,
@@ -342,8 +554,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       boxShadow: const [
                         BoxShadow(
                           color: AppColors.cardShadow,
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
+                          blurRadius: 8,
+                          offset: Offset(0, 3),
                         ),
                       ],
                     ),
@@ -351,7 +563,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       children: [
                         ListTile(
                           leading: const CircleAvatar(
-                            backgroundColor: AppColors.cream,
+                            backgroundColor: Color(0xFFFFFBEB),
                             child: Icon(
                               Icons.wb_sunny_rounded,
                               color: AppColors.accentOrange,
@@ -362,7 +574,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            _formatTime(
+                            _formatHourMinute(
                               _settings.wakeHour,
                               _settings.wakeMinute,
                             ),
@@ -385,7 +597,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                         const Divider(height: 1),
                         ListTile(
                           leading: const CircleAvatar(
-                            backgroundColor: AppColors.cream,
+                            backgroundColor: Color(0xFFECFDF5),
                             child: Icon(
                               Icons.nightlight_round,
                               color: AppColors.forestGreen,
@@ -396,7 +608,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                             style: const TextStyle(fontWeight: FontWeight.bold),
                           ),
                           subtitle: Text(
-                            _formatTime(
+                            _formatHourMinute(
                               _settings.sleepHour,
                               _settings.sleepMinute,
                             ),
@@ -422,356 +634,326 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
 
                   const SizedBox(height: 24),
 
-                  // Reminders Configuration Section
-                  Text(
-                    widget.isArabic
-                        ? 'إعدادات التذكيرات والإشعارات'
-                        : 'Individual Reminder Settings',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textDark,
-                    ),
-                  ),
-                  const SizedBox(height: 10),
-
-                  // A. Meal Reminder
-                  _buildReminderConfigCard(
-                    title: widget.isArabic ? 'منبه الوجبات' : 'Meal Reminder',
-                    subtitle: widget.isArabic
-                        ? 'تذكير دوري بوجباتك الصحية'
-                        : 'Regular healthy meal reminders',
-                    icon: Icons.restaurant_menu_rounded,
-                    enabled: _settings.mealEnabled,
-                    onChanged: (val) async {
-                      setState(() => _settings.mealEnabled = val);
-                      await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
-                    },
-                    intervalWidget: Row(
-                      children: [
-                        Text(
-                          widget.isArabic ? 'الفاصل: ' : 'Interval: ',
-                          style: const TextStyle(fontSize: 12),
+                  // 4. Primary Calculated Alarms Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        widget.isArabic
+                            ? 'الوجبات والمواعيد المحسوبة تلقائياً'
+                            : 'Auto-Calculated Schedules',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textDark,
                         ),
-                        DropdownButton<int>(
-                          value: _settings.mealIntervalHours,
-                          items: [1, 2, 3, 4]
-                              .map(
-                                (h) => DropdownMenuItem(
-                                  value: h,
-                                  child: Text(
-                                    widget.isArabic
-                                        ? 'كل $h ساعة'
-                                        : 'Every $h hr',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(() => _settings.mealIntervalHours = val);
-                              await _settings.save();
-                              if (_settings.isRunning) await _applyReminders();
-                            }
-                          },
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
                         ),
-                      ],
-                    ),
+                        decoration: BoxDecoration(
+                          color: AppColors.forestGreen.withValues(alpha: 0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          widget.isArabic ? 'تلقائي' : 'Auto',
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.forestGreen,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
 
+                  const SizedBox(height: 24),
+
+                  // 5. Unified Optional & Custom Reminders Section (اختياري — تقدر تسيبه أو تفعّله + إضافة تنبيه)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(
+                            Icons.tune_rounded,
+                            color: AppColors.accentOrange,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            widget.isArabic
+                                ? 'اختياري — تقدر تسيبه أو تفعّله'
+                                : 'Optional Reminders',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textDark,
+                            ),
+                          ),
+                        ],
+                      ),
+                      TextButton.icon(
+                        onPressed: () => _showCustomAlarmDialog(),
+                        icon: const Icon(
+                          Icons.add_circle_outline_rounded,
+                          size: 18,
+                          color: AppColors.forestGreen,
+                        ),
+                        label: Text(
+                          widget.isArabic ? 'إضافة تنبيه' : 'Add Alarm',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.forestGreen,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                   const SizedBox(height: 12),
 
-                  // B. Water Reminder
-                  _buildReminderConfigCard(
-                    title: widget.isArabic ? 'منبه الماء' : 'Water Reminder',
+                  // A. Motivation & Support (التحفيز والدعم - موعد ثابت بعد الإفطار بساعة)
+                  _buildOptionalReminderCard(
+                    title: widget.isArabic ? 'التحفيز والدعم' : 'Motivation & Support',
                     subtitle: widget.isArabic
-                        ? 'تذكير لشرب الماء وترطيب الجسم'
-                        : 'Reminder to stay hydrated',
-                    icon: Icons.water_drop_rounded,
-                    enabled: _settings.waterEnabled,
-                    onChanged: (val) async {
-                      setState(() => _settings.waterEnabled = val);
+                        ? 'رسائل تحفيزية تصلك بعد الإفطار بساعة واحدة'
+                        : 'Motivational quote 1 hour after breakfast',
+                    icon: Icons.auto_awesome_rounded,
+                    enabled: _settings.motivationEnabled,
+                    onToggle: (val) async {
+                      setState(() => _settings.motivationEnabled = val);
                       await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
+                      if (_settings.isRunning) {
+                        await _applyReminders(silent: true);
+                      }
                     },
-                    intervalWidget: Row(
-                      children: [
-                        Text(
-                          widget.isArabic ? 'الفاصل: ' : 'Interval: ',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        DropdownButton<int>(
-                          value: _settings.waterIntervalHours,
-                          items: [1, 2, 3, 4]
-                              .map(
-                                (h) => DropdownMenuItem(
-                                  value: h,
-                                  child: Text(
-                                    widget.isArabic
-                                        ? 'كل $h ساعة'
-                                        : 'Every $h hr',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(
-                                () => _settings.waterIntervalHours = val,
-                              );
-                              await _settings.save();
-                              if (_settings.isRunning) await _applyReminders();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
+                    timeText: _formatTimeOfDay(_settings.getMotivationTime()),
+                    onTimeTap: null, // Fixed time, no manual editing needed
                   ),
 
-                  const SizedBox(height: 12),
-
-                  // C. Vegetables / Snack Reminder
-                  _buildReminderConfigCard(
-                    title: widget.isArabic
-                        ? 'منبه الخضروات البينية'
-                        : 'Vegetables & Snack Reminder',
+                  // B. Workout Reminder (تنبيه التمارين اليومية)
+                  _buildOptionalReminderCard(
+                    title: widget.isArabic ? 'التمارين اليومية' : 'Daily Workouts',
                     subtitle: widget.isArabic
-                        ? 'تذكير بتناول حصص الخضروات والفيتامينات'
-                        : 'Reminder for fresh veggies & vitamins',
-                    icon: Icons.eco_rounded,
-                    enabled: _settings.veggiesEnabled,
-                    onChanged: (val) async {
-                      setState(() => _settings.veggiesEnabled = val);
-                      await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
-                    },
-                    intervalWidget: Row(
-                      children: [
-                        Text(
-                          widget.isArabic ? 'الفاصل: ' : 'Interval: ',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        DropdownButton<int>(
-                          value: _settings.veggiesIntervalHours,
-                          items: [2, 3, 4, 5]
-                              .map(
-                                (h) => DropdownMenuItem(
-                                  value: h,
-                                  child: Text(
-                                    widget.isArabic
-                                        ? 'كل $h ساعة'
-                                        : 'Every $h hr',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(
-                                () => _settings.veggiesIntervalHours = val,
-                              );
-                              await _settings.save();
-                              if (_settings.isRunning) await _applyReminders();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // D. Screen Off / Bedtime Eye Rest (إيقاف الشاشات / راحة للعين قبل النوم)
-                  _buildReminderConfigCard(
-                    title: widget.isArabic
-                        ? 'إيقاف الشاشات / راحة للعين قبل النوم'
-                        : 'Screen Off / Eye Rest Before Sleep',
-                    subtitle: widget.isArabic
-                        ? 'تنبيه قبل موعد النوم لإيقاف الشاشات وإراحة العين'
-                        : 'Alert before bedtime to stop screens and rest eyes',
-                    icon: Icons.phone_android_rounded,
-                    enabled: _settings.screenOffEnabled,
-                    onChanged: (val) async {
-                      setState(() => _settings.screenOffEnabled = val);
-                      await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
-                    },
-                    intervalWidget: Row(
-                      children: [
-                        Text(
-                          widget.isArabic ? 'قبل النوم بـ: ' : 'Before sleep: ',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        DropdownButton<int>(
-                          value: _settings.screenOffMinutesBeforeSleep,
-                          items: [15, 30, 45, 60]
-                              .map(
-                                (m) => DropdownMenuItem(
-                                  value: m,
-                                  child: Text(
-                                    widget.isArabic
-                                        ? '$m دقيقة'
-                                        : '$m mins',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(
-                                () =>
-                                    _settings.screenOffMinutesBeforeSleep =
-                                        val,
-                              );
-                              await _settings.save();
-                              if (_settings.isRunning) await _applyReminders();
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 12),
-
-                  // E. Workout Reminder (تنبيه التمارين - اختياري)
-                  _buildReminderConfigCard(
-                    title: widget.isArabic
-                        ? 'تنبيه التمارين (اختياري)'
-                        : 'Workout Reminder (Optional)',
-                    subtitle: widget.isArabic
-                        ? 'تذكير بميعاد التمرين اليومي'
+                        ? 'تذكير بالميعاد المحدد للتمارين الرياضية'
                         : 'Daily workout schedule reminder',
                     icon: Icons.fitness_center_rounded,
                     enabled: _settings.workoutEnabled,
-                    onChanged: (val) async {
+                    onToggle: (val) async {
                       setState(() => _settings.workoutEnabled = val);
                       await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
+                      if (_settings.isRunning) {
+                        await _applyReminders(silent: true);
+                      }
                     },
-                    intervalWidget: TextButton(
-                      onPressed: () => _pickTime(isWake: false, isWorkout: true),
-                      child: Text(
-                        _formatTime(
-                          _settings.workoutHour,
-                          _settings.workoutMinute,
-                        ),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.forestGreen,
-                          fontSize: 12.5,
-                        ),
-                      ),
+                    timeText: _formatHourMinute(
+                      _settings.workoutHour,
+                      _settings.workoutMinute,
                     ),
+                    onTimeTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(
+                          hour: _settings.workoutHour,
+                          minute: _settings.workoutMinute,
+                        ),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _settings.workoutHour = picked.hour;
+                          _settings.workoutMinute = picked.minute;
+                        });
+                        await _settings.save();
+                        if (_settings.isRunning) {
+                          await _applyReminders(silent: true);
+                        }
+                      }
+                    },
                   ),
 
-                  const SizedBox(height: 12),
-
-                  // F. Vitamins Reminder (الفيتامينات)
-                  _buildReminderConfigCard(
-                    title: widget.isArabic
-                        ? 'تذكير الفيتامينات'
-                        : 'Vitamins Reminder',
+                  // C. Vitamins (الفيتامينات)
+                  _buildOptionalReminderCard(
+                    title: widget.isArabic ? 'الفيتامينات' : 'Vitamins',
                     subtitle: widget.isArabic
-                        ? 'تذكير بتناول الفيتامينات إن وصفت لك'
+                        ? 'تذكير بتناول الفيتامينات في الوقت المحدد'
                         : 'Reminder to take prescribed vitamins',
                     icon: Icons.medication_rounded,
                     enabled: _settings.vitaminsEnabled,
-                    onChanged: (val) async {
+                    onToggle: (val) async {
                       setState(() => _settings.vitaminsEnabled = val);
                       await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
+                      if (_settings.isRunning) {
+                        await _applyReminders(silent: true);
+                      }
                     },
-                    intervalWidget: TextButton(
-                      onPressed: () =>
-                          _pickTime(isWake: false, isVitamins: true),
-                      child: Text(
-                        _formatTime(
-                          _settings.vitaminsHour,
-                          _settings.vitaminsMinute,
-                        ),
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.forestGreen,
-                          fontSize: 12.5,
-                        ),
-                      ),
+                    timeText: _formatHourMinute(
+                      _settings.vitaminsHour,
+                      _settings.vitaminsMinute,
                     ),
+                    onTimeTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(
+                          hour: _settings.vitaminsHour,
+                          minute: _settings.vitaminsMinute,
+                        ),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _settings.vitaminsHour = picked.hour;
+                          _settings.vitaminsMinute = picked.minute;
+                        });
+                        await _settings.save();
+                        if (_settings.isRunning) {
+                          await _applyReminders(silent: true);
+                        }
+                      }
+                    },
                   ),
 
-                  const SizedBox(height: 12),
-
-                  // G. Eye Strain / Screen Rest (إجهاد العين / راحة للعين من الشاشات)
-                  _buildReminderConfigCard(
+                  // D. Screen Off & Bedtime (الابتعاد عن الشاشة والاستعداد للنوم)
+                  _buildOptionalReminderCard(
                     title: widget.isArabic
-                        ? 'إجهاد العين / راحة للعين من الشاشات'
-                        : 'Eye Strain & Screen Rest',
+                        ? 'الابتعاد عن الشاشة والاستعداد للنوم'
+                        : 'Screen Off & Bedtime',
                     subtitle: widget.isArabic
-                        ? 'راحة دورية للعين من الموبايل والشاشات'
-                        : 'Periodic eye rest from mobile & screens',
-                    icon: Icons.remove_red_eye_rounded,
-                    enabled: _settings.eyeRestEnabled,
-                    onChanged: (val) async {
-                      setState(() => _settings.eyeRestEnabled = val);
+                        ? 'إيقاف الشاشات وراحة العين قبل النوم'
+                        : 'Rest your eyes before bedtime',
+                    icon: Icons.phone_android_rounded,
+                    enabled: _settings.screenOffEnabled,
+                    onToggle: (val) async {
+                      setState(() => _settings.screenOffEnabled = val);
                       await _settings.save();
-                      if (_settings.isRunning) await _applyReminders();
+                      if (_settings.isRunning) {
+                        await _applyReminders(silent: true);
+                      }
                     },
-                    intervalWidget: Row(
-                      children: [
-                        Text(
-                          widget.isArabic ? 'الفاصل: ' : 'Interval: ',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        DropdownButton<int>(
-                          value: _settings.eyeRestIntervalHours,
-                          items: [1, 2, 3]
-                              .map(
-                                (h) => DropdownMenuItem(
-                                  value: h,
-                                  child: Text(
-                                    widget.isArabic
-                                        ? 'كل $h ساعة'
-                                        : 'Every $h hr',
-                                    style: const TextStyle(fontSize: 12),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (val) async {
-                            if (val != null) {
-                              setState(
-                                () => _settings.eyeRestIntervalHours = val,
-                              );
-                              await _settings.save();
-                              if (_settings.isRunning) await _applyReminders();
-                            }
-                          },
-                        ),
-                      ],
+                    timeText: _formatHourMinute(
+                      _settings.screenOffHour,
+                      _settings.screenOffMinute,
                     ),
+                    onTimeTap: () async {
+                      final picked = await showTimePicker(
+                        context: context,
+                        initialTime: TimeOfDay(
+                          hour: _settings.screenOffHour,
+                          minute: _settings.screenOffMinute,
+                        ),
+                      );
+                      if (picked != null) {
+                        setState(() {
+                          _settings.screenOffHour = picked.hour;
+                          _settings.screenOffMinute = picked.minute;
+                        });
+                        await _settings.save();
+                        if (_settings.isRunning) {
+                          await _applyReminders(silent: true);
+                        }
+                      }
+                    },
                   ),
 
-                  const SizedBox(height: 32),
+                  // E. User Custom Added Alarms List under Optional Section
+                  if (_settings.customAlarms.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    ..._settings.customAlarms.map((alarm) {
+                      return Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.cardShadow,
+                              blurRadius: 6,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: alarm.isEnabled
+                                ? AppColors.forestGreen.withValues(alpha: 0.3)
+                                : Colors.grey.shade200,
+                          ),
+                        ),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: alarm.isEnabled
+                                ? AppColors.forestGreen.withValues(alpha: 0.1)
+                                : Colors.grey.shade100,
+                            child: Icon(
+                              Icons.alarm_rounded,
+                              color: alarm.isEnabled
+                                  ? AppColors.forestGreen
+                                  : Colors.grey,
+                            ),
+                          ),
+                          title: Text(
+                            alarm.title,
+                            style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: alarm.isEnabled
+                                  ? AppColors.textDark
+                                  : AppColors.mutedText,
+                            ),
+                          ),
+                          subtitle: Text(
+                            _formatHourMinute(alarm.hour, alarm.minute),
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.forestGreen,
+                            ),
+                          ),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Switch(
+                                value: alarm.isEnabled,
+                                activeThumbColor: AppColors.forestGreen,
+                                onChanged: (val) =>
+                                    _toggleCustomAlarm(alarm, val),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.edit_outlined,
+                                  size: 20,
+                                  color: Colors.blue,
+                                ),
+                                onPressed: () =>
+                                    _showCustomAlarmDialog(alarmToEdit: alarm),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 20,
+                                  color: Colors.red,
+                                ),
+                                onPressed: () => _deleteCustomAlarm(alarm),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
                 ],
               ),
       ),
     );
   }
 
-  Widget _buildReminderConfigCard({
+  Widget _buildOptionalReminderCard({
     required String title,
     required String subtitle,
     required IconData icon,
     required bool enabled,
-    required ValueChanged<bool> onChanged,
-    required Widget intervalWidget,
+    required ValueChanged<bool> onToggle,
+    required String timeText,
+    required VoidCallback? onTimeTap,
   }) {
     return Container(
+      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppColors.white,
@@ -817,9 +999,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 14,
-                        color: enabled
-                            ? AppColors.textDark
-                            : AppColors.mutedText,
+                        color: enabled ? AppColors.textDark : AppColors.mutedText,
                       ),
                     ),
                     const SizedBox(height: 2),
@@ -835,16 +1015,37 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
               ),
               Switch(
                 value: enabled,
-                onChanged: onChanged,
                 activeThumbColor: AppColors.forestGreen,
+                onChanged: onToggle,
               ),
             ],
           ),
           if (enabled) ...[
             const Divider(height: 16),
             Row(
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: [intervalWidget],
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  widget.isArabic ? 'الوقت' : 'Time',
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.mutedText,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: onTimeTap,
+                  icon: const Icon(Icons.access_time_rounded, size: 16),
+                  label: Text(
+                    timeText,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 13,
+                      color: AppColors.forestGreen,
+                    ),
+                  ),
+                ),
+              ],
             ),
           ],
         ],

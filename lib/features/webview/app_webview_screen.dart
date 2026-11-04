@@ -4,19 +4,21 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/constants/app_routes.dart';
 import '../../core/navigation/navigation_policy.dart';
+import '../../core/services/app_config_service.dart';
 import '../../core/theme/app_colors.dart';
-import '../about/about_us_screen.dart';
-import '../main/persistent_bottom_nav.dart';
-import '../services/services_screen.dart';
 
 class AppWebViewScreen extends StatefulWidget {
   final AppRouteItem routeItem;
   final bool isArabic;
+  final bool showBottomNav;
+  final VoidCallback? onReturnToHome;
 
   const AppWebViewScreen({
     super.key,
     required this.routeItem,
     this.isArabic = true,
+    this.showBottomNav = false,
+    this.onReturnToHome,
   });
 
   @override
@@ -29,16 +31,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
   bool _hasError = false;
   String? _errorMessage;
   int _loadingProgress = 0;
-
-  int get _currentIndex {
-    if (widget.routeItem.id == 'book') return 2;
-    if (widget.routeItem.id == 'faq' || widget.routeItem.id == 'articles') return 4;
-    if (widget.routeItem.id == 'chatbot' || widget.routeItem.id == 'followupChat') {
-      return 5;
-    }
-    if (widget.routeItem.id == 'packages') return 4;
-    return 0;
-  }
+  bool _isHandlingBack = false;
 
   @override
   void initState() {
@@ -47,6 +40,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
   }
 
   void _initWebViewController() {
+    final targetUrl = AppConfigService.getUrl(widget.routeItem);
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(AppColors.cream)
@@ -68,6 +62,27 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
             }
           },
           onPageFinished: (String url) {
+            // Set responsive viewport & center page content cleanly across the full screen width
+            _controller.runJavaScript('''
+              (function() {
+                var meta = document.querySelector('meta[name="viewport"]');
+                if (!meta) {
+                  meta = document.createElement('meta');
+                  meta.name = 'viewport';
+                  if (document.head) {
+                    document.head.appendChild(meta);
+                  }
+                }
+                meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
+                document.documentElement.style.maxWidth = '100%';
+                document.documentElement.style.overflowX = 'hidden';
+                document.body.style.maxWidth = '100%';
+                document.body.style.margin = '0 auto';
+                document.body.style.overflowX = 'hidden';
+                document.body.style.zoom = '100%';
+                document.body.style.transformOrigin = 'top center';
+              })();
+            ''');
             if (mounted) {
               setState(() {
                 _isLoading = false;
@@ -98,7 +113,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
           },
         ),
       )
-      ..loadRequest(Uri.parse(widget.routeItem.url));
+      ..loadRequest(Uri.parse(targetUrl));
   }
 
   void _retryLoad() {
@@ -111,70 +126,72 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
   }
 
   Future<void> _openInExternalBrowser() async {
-    final uri = Uri.parse(widget.routeItem.url);
+    final targetUrl = AppConfigService.getUrl(widget.routeItem);
+    final uri = Uri.parse(targetUrl);
     if (await canLaunchUrl(uri)) {
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
-  Future<bool> _handleWillPop() async {
-    if (await _controller.canGoBack()) {
-      await _controller.goBack();
-      return false;
-    }
-    return true;
-  }
+  /// Single thread-safe back button handler.
+  Future<void> _handleBackPress() async {
+    if (_isHandlingBack) return;
+    _isHandlingBack = true;
 
-  void _onBottomNavTapped(int index, BuildContext context) {
-    if (index == 0) {
-      Navigator.popUntil(context, (route) => route.isFirst);
-      return;
-    }
-    if (index == 1) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AboutUsScreen(isArabic: widget.isArabic),
-        ),
-      );
-      return;
-    }
-    if (index == 2 && widget.routeItem.id != 'book') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AppWebViewScreen(
-            routeItem: AppRouteRegistry.book,
-            isArabic: widget.isArabic,
-          ),
-        ),
-      );
-      return;
-    }
-    if (index == 3) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => ServicesScreen(isArabic: widget.isArabic),
-        ),
-      );
-      return;
-    }
-    if (index == 4 && widget.routeItem.id != 'faq') {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AppWebViewScreen(
-            routeItem: AppRouteRegistry.faq,
-            isArabic: widget.isArabic,
-          ),
-        ),
-      );
-      return;
-    }
-    if (index == 5) {
-      Navigator.popUntil(context, (route) => route.isFirst);
-      return;
+    try {
+      final initialUrlStr = AppConfigService.getUrl(widget.routeItem);
+      final initialUri = Uri.tryParse(initialUrlStr);
+
+      String? currentUrlStr;
+      bool canGoBack = false;
+
+      try {
+        currentUrlStr = await _controller.currentUrl();
+        canGoBack = await _controller.canGoBack();
+      } catch (_) {
+        canGoBack = false;
+      }
+
+      bool isOnInitialUrl = false;
+      if (currentUrlStr != null && initialUri != null) {
+        final currentUri = Uri.tryParse(currentUrlStr);
+        if (currentUri != null) {
+          final currentNormalized =
+              '${currentUri.host.toLowerCase()}${currentUri.path.replaceAll(RegExp(r'/+$'), '')}';
+          final initialNormalized =
+              '${initialUri.host.toLowerCase()}${initialUri.path.replaceAll(RegExp(r'/+$'), '')}';
+          if (currentNormalized == initialNormalized) {
+            isOnInitialUrl = true;
+          }
+        }
+      }
+
+      // If on initial URL or cannot go back in WebView, pop screen or return to home directly
+      if (isOnInitialUrl || !canGoBack) {
+        if (!mounted) return;
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else if (widget.onReturnToHome != null) {
+          widget.onReturnToHome!();
+        } else {
+          Navigator.of(context, rootNavigator: true).maybePop();
+        }
+        return;
+      }
+
+      // Otherwise navigate back inside WebView
+      await _controller.goBack();
+    } catch (e) {
+      debugPrint('Error in _handleBackPress: $e');
+      if (mounted) {
+        if (Navigator.canPop(context)) {
+          Navigator.pop(context);
+        } else if (widget.onReturnToHome != null) {
+          widget.onReturnToHome!();
+        }
+      }
+    } finally {
+      _isHandlingBack = false;
     }
   }
 
@@ -186,10 +203,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        final shouldPop = await _handleWillPop();
-        if (shouldPop && context.mounted) {
-          Navigator.of(context).pop();
-        }
+        await _handleBackPress();
       },
       child: Directionality(
         textDirection: widget.isArabic ? TextDirection.rtl : TextDirection.ltr,
@@ -206,12 +220,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
             leading: IconButton(
               icon: const Icon(Icons.arrow_back_ios_new_rounded),
               tooltip: widget.isArabic ? 'رجوع' : 'Back',
-              onPressed: () async {
-                final shouldPop = await _handleWillPop();
-                if (shouldPop && context.mounted) {
-                  Navigator.of(context).pop();
-                }
-              },
+              onPressed: _handleBackPress,
             ),
             actions: [
               IconButton(
@@ -250,143 +259,124 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
               ),
             ],
           ),
-          body: Stack(
+          body: Column(
             children: [
-              Column(
-                children: [
-                  // Progress Bar during loading
-                  if (_isLoading && _loadingProgress < 100)
-                    LinearProgressIndicator(
-                      value: _loadingProgress / 100.0,
-                      backgroundColor: AppColors.cream,
-                      color: AppColors.accentOrange,
-                      minHeight: 3,
-                    ),
+              // Progress Bar during loading
+              if (_isLoading && _loadingProgress < 100)
+                LinearProgressIndicator(
+                  value: _loadingProgress / 100.0,
+                  backgroundColor: AppColors.cream,
+                  color: AppColors.accentOrange,
+                  minHeight: 3,
+                ),
 
-                  // Main content area with bottom padding for persistent nav bar
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 75),
-                      child: Stack(
-                        children: [
-                          // WebView widget
-                          WebViewWidget(controller: _controller),
+              // Main content area
+              Expanded(
+                child: Stack(
+                  children: [
+                    // WebView widget
+                    WebViewWidget(controller: _controller),
 
-                          // Initial loading screen
-                          if (_isLoading && _loadingProgress < 25)
-                            Container(
-                              color: AppColors.cream,
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const CircularProgressIndicator(
-                                      color: AppColors.forestGreen,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      widget.isArabic
-                                          ? 'جاري تحميل الصفحة...'
-                                          : 'Loading page...',
-                                      style: const TextStyle(
-                                        color: AppColors.mutedText,
-                                        fontSize: 14,
-                                      ),
-                                    ),
-                                  ],
+                    // Initial loading screen
+                    if (_isLoading && _loadingProgress < 25)
+                      Container(
+                        color: AppColors.cream,
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const CircularProgressIndicator(
+                                color: AppColors.forestGreen,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                widget.isArabic
+                                    ? 'جاري تحميل الصفحة...'
+                                    : 'Loading page...',
+                                style: const TextStyle(
+                                  color: AppColors.mutedText,
+                                  fontSize: 14,
                                 ),
                               ),
-                            ),
-
-                          // Error overlay
-                          if (_hasError)
-                            Container(
-                              color: AppColors.cream,
-                              padding: const EdgeInsets.all(24.0),
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    const Icon(
-                                      Icons.wifi_off_rounded,
-                                      size: 64,
-                                      color: AppColors.mutedText,
-                                    ),
-                                    const SizedBox(height: 16),
-                                    Text(
-                                      widget.isArabic
-                                          ? 'تعذر تحميل الصفحة'
-                                          : 'Failed to load page',
-                                      style: const TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.textDark,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      widget.isArabic
-                                          ? 'يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.'
-                                          : 'Please check your internet connection and try again.',
-                                      textAlign: TextAlign.center,
-                                      style: const TextStyle(
-                                        fontSize: 13,
-                                        color: AppColors.mutedText,
-                                      ),
-                                    ),
-                                    if (_errorMessage != null) ...[
-                                      const SizedBox(height: 8),
-                                      Text(
-                                        _errorMessage!,
-                                        textAlign: TextAlign.center,
-                                        style: TextStyle(
-                                          fontSize: 11,
-                                          color: Colors.red.shade400,
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(height: 24),
-                                    ElevatedButton.icon(
-                                      onPressed: _retryLoad,
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.forestGreen,
-                                        foregroundColor: AppColors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 24,
-                                          vertical: 12,
-                                        ),
-                                        shape: RoundedRectangleBorder(
-                                          borderRadius: BorderRadius.circular(12),
-                                        ),
-                                      ),
-                                      icon: const Icon(Icons.refresh_rounded),
-                                      label: Text(
-                                        widget.isArabic ? 'إعادة المحاولة' : 'Retry',
-                                        style: const TextStyle(
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ),
-                        ],
+                            ],
+                          ),
+                        ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
 
-              // Persistent Bottom Navigation Bar
-              Positioned(
-                left: 12,
-                right: 12,
-                bottom: 12,
-                child: PersistentBottomNavBar(
-                  currentIndex: _currentIndex,
-                  onTap: (index) => _onBottomNavTapped(index, context),
-                  isArabic: widget.isArabic,
+                    // Error overlay
+                    if (_hasError)
+                      Container(
+                        color: AppColors.cream,
+                        padding: const EdgeInsets.all(24.0),
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              const Icon(
+                                Icons.wifi_off_rounded,
+                                size: 64,
+                                color: AppColors.mutedText,
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                widget.isArabic
+                                    ? 'تعذر تحميل الصفحة'
+                                    : 'Failed to load page',
+                                style: const TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                widget.isArabic
+                                    ? 'يرجى التأكد من الاتصال بالإنترنت والمحاولة مرة أخرى.'
+                                    : 'Please check your internet connection and try again.',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: AppColors.mutedText,
+                                ),
+                              ),
+                              if (_errorMessage != null) ...[
+                                const SizedBox(height: 8),
+                                Text(
+                                  _errorMessage!,
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    color: Colors.red.shade400,
+                                  ),
+                                ),
+                              ],
+                              const SizedBox(height: 24),
+                              ElevatedButton.icon(
+                                onPressed: _retryLoad,
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.forestGreen,
+                                  foregroundColor: AppColors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 12,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                icon: const Icon(Icons.refresh_rounded),
+                                label: Text(
+                                  widget.isArabic ? 'إعادة المحاولة' : 'Retry',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
             ],

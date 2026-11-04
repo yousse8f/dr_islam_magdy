@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:dr_islam_magdy/features/main/main_screen.dart';
 import 'package:dr_islam_magdy/core/constants/app_routes.dart';
 import 'package:dr_islam_magdy/core/navigation/navigation_policy.dart';
+import 'package:dr_islam_magdy/core/services/app_config_service.dart';
 
 void main() {
   testWidgets('App renders main screen without crashing', (
@@ -65,6 +66,20 @@ void main() {
         ),
         false,
       );
+      expect(
+        await NavigationPolicyHandler.shouldNavigateInternal(
+          'https://checkout.xpay.app/some-payment-session',
+        ),
+        true,
+      );
     },
   );
+
+  test('AppConfigService returns correct fallback URLs and titles', () {
+    final url = AppConfigService.getUrl(AppRouteRegistry.book);
+    expect(url, 'https://wedietly.com/app/book');
+
+    final titleAr = AppConfigService.getTitleAr(AppRouteRegistry.book);
+    expect(titleAr, 'حجز الخدمات');
+  });
 }

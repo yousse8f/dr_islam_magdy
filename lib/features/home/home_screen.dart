@@ -6,6 +6,7 @@ import '../calories/calorie_calculator_screen.dart';
 import '../calories/food_log_screen.dart';
 import '../calories/models/calorie_profile.dart';
 import '../reminders/meal_reminders_screen.dart';
+import '../reminders/widgets/motivation_popup.dart';
 import '../services/services_screen.dart';
 import '../webview/app_webview_screen.dart';
 
@@ -30,7 +31,12 @@ class HomeScreen extends StatelessWidget {
   }
 
   Future<void> _openCalorieFeature(BuildContext context) async {
-    final profile = await CalorieProfile.load();
+    CalorieProfile? profile;
+    try {
+      profile = await CalorieProfile.load();
+    } catch (_) {
+      profile = null;
+    }
     if (!context.mounted) return;
     if (profile != null) {
       Navigator.push(
@@ -142,15 +148,9 @@ class HomeScreen extends StatelessWidget {
                 color: const Color(0xFFFDE047),
                 tooltip: isArabic ? 'الإشعارات' : 'Notifications',
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isArabic
-                            ? 'لا توجد إشعارات جديدة حالياً'
-                            : 'No new notifications',
-                      ),
-                      backgroundColor: AppColors.forestGreen,
-                    ),
+                  MotivationPopupManager.showMotivationPopup(
+                    context,
+                    isArabic: isArabic,
                   );
                 },
               ),
@@ -246,7 +246,7 @@ class HomeScreen extends StatelessWidget {
                               children: [
                                 const Icon(
                                   Icons.calendar_month_rounded,
-                                  size: 16,
+                                  size: 18,
                                 ),
                                 const SizedBox(width: 4),
                                 Flexible(
@@ -296,7 +296,7 @@ class HomeScreen extends StatelessWidget {
                                   ),
                                   child: const Icon(
                                     Icons.chat_rounded,
-                                    size: 13,
+                                    size: 15,
                                     color: Colors.white,
                                   ),
                                 ),
@@ -354,22 +354,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // 2. احسب سعراتك
-                Expanded(
-                  child: _buildQuickCard(
-                    context,
-                    title: isArabic ? 'احسب\nسعراتك' : 'Calculate\nCalories',
-                    icon: Icons.local_fire_department_rounded,
-                    iconColor: const Color(0xFF0284C7),
-                    gradientColors: [
-                      const Color(0xFFF0F9FF),
-                      const Color(0xFFE0F2FE),
-                    ],
-                    onTap: () => _openCalorieFeature(context),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                // 3. تنبيهات صحية
+                // 2. تنبيهات صحية
                 Expanded(
                   child: _buildQuickCard(
                     context,
@@ -389,6 +374,21 @@ class HomeScreen extends StatelessWidget {
                         ),
                       );
                     },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // 3. احسب سعراتك
+                Expanded(
+                  child: _buildQuickCard(
+                    context,
+                    title: isArabic ? 'احسب\nسعراتك' : 'Calculate\nCalories',
+                    icon: Icons.local_fire_department_rounded,
+                    iconColor: const Color(0xFF0284C7),
+                    gradientColors: [
+                      const Color(0xFFF0F9FF),
+                      const Color(0xFFE0F2FE),
+                    ],
+                    onTap: () => _openCalorieFeature(context),
                   ),
                 ),
                 const SizedBox(width: 6),
@@ -446,7 +446,22 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // 2. باقات المتابعة
+                // 2. المقالات الطبية
+                Expanded(
+                  child: _buildQuickCard(
+                    context,
+                    title: isArabic ? 'المقالات\nالطبية' : 'Medical\nArticles',
+                    icon: Icons.menu_book_rounded,
+                    iconColor: const Color(0xFF7E22CE),
+                    gradientColors: [
+                      const Color(0xFFFAF5FF),
+                      const Color(0xFFF3E8FF),
+                    ],
+                    onTap: () => _openRoute(context, AppRouteRegistry.articles),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // 3. باقات المتابعة
                 Expanded(
                   child: _buildQuickCard(
                     context,
@@ -461,7 +476,7 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // 3. أحدث العروض
+                // 4. أحدث العروض
                 Expanded(
                   child: _buildQuickCard(
                     context,
@@ -473,21 +488,6 @@ class HomeScreen extends StatelessWidget {
                       const Color(0xFFFFEDD5),
                     ],
                     onTap: () => _openRoute(context, AppRouteRegistry.offers),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                // 4. المقالات الطبية
-                Expanded(
-                  child: _buildQuickCard(
-                    context,
-                    title: isArabic ? 'المقالات\nالطبية' : 'Medical\nArticles',
-                    icon: Icons.menu_book_rounded,
-                    iconColor: const Color(0xFF7E22CE),
-                    gradientColors: [
-                      const Color(0xFFFAF5FF),
-                      const Color(0xFFF3E8FF),
-                    ],
-                    onTap: () => _openRoute(context, AppRouteRegistry.articles),
                   ),
                 ),
               ],
@@ -545,8 +545,8 @@ class HomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  width: 34,
-                  height: 34,
+                  width: 38,
+                  height: 38,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: gradientColors,
@@ -562,7 +562,7 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: iconColor, size: 18),
+                  child: Icon(icon, color: iconColor, size: 21),
                 ),
                 Text(
                   title,
@@ -622,26 +622,26 @@ class _AnimatedLogoBannerState extends State<AnimatedLogoBanner>
       scale: _scaleAnimation,
       child: Center(
         child: Container(
-          width: 175, // Optimized harmonious width
-          height: 62, // Optimized harmonious height
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+          width: 210,
+          height: 82,
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
           decoration: BoxDecoration(
             color: AppColors.white,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(20),
             boxShadow: const [
               BoxShadow(
                 color: Colors.black26,
-                blurRadius: 8,
-                offset: Offset(0, 3),
+                blurRadius: 10,
+                offset: Offset(0, 4),
               ),
             ],
             border: Border.all(
               color: AppColors.white.withValues(alpha: 0.6),
-              width: 2,
+              width: 2.5,
             ),
           ),
           child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(16),
             child: Image.asset(
               'assets/images/app_icon.png',
               fit: BoxFit.contain,

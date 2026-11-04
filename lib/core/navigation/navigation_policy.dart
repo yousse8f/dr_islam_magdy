@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class NavigationPolicyHandler {
@@ -11,34 +13,37 @@ class NavigationPolicyHandler {
 
     // Handle non-web schemes (tel, mailto, whatsapp, intent, etc.)
     if (scheme != 'http' && scheme != 'https') {
-      await _launchExternal(uri);
+      _launchExternal(uri);
       return false;
     }
 
     final host = uri.host.toLowerCase();
 
-    // Strict domain check for wedietly.com to prevent lookalike domain bypasses
+    // Strict domain check for wedietly.com and exact match for checkout.xpay.app
     final isWedietlyDomain =
         host == 'wedietly.com' ||
         host == 'www.wedietly.com' ||
         host.endsWith('.wedietly.com');
 
-    if (isWedietlyDomain) {
+    final isXPayDomain = host == 'checkout.xpay.app';
+
+    if (isWedietlyDomain || isXPayDomain) {
       return true; // Load inside WebView
     }
 
     // External HTTPS sites (e.g. social media, payment gateways, external links)
-    await _launchExternal(uri);
+    _launchExternal(uri);
     return false;
   }
 
-  static Future<void> _launchExternal(Uri uri) async {
-    try {
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri, mode: LaunchMode.externalApplication);
-      }
-    } catch (_) {
-      // Graceful fallback if external app is not installed or scheme fails
-    }
+  static void _launchExternal(Uri uri) {
+    debugPrint('[NavigationPolicy] External launch triggered -> scheme: ${uri.scheme}, host: ${uri.host}');
+    unawaited(
+      canLaunchUrl(uri).then((can) {
+        if (can) {
+          launchUrl(uri, mode: LaunchMode.externalApplication);
+        }
+      }).catchError((_) {}),
+    );
   }
 }
