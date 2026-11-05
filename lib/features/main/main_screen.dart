@@ -27,12 +27,42 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    NotificationService.setOnMotivationNotificationTapped(() {
+    NotificationService.setOnMotivationNotificationTapped((quote) {
       if (mounted) {
-        MotivationPopupManager.showMotivationPopup(context, isArabic: _isArabic);
+        MotivationPopupManager.showMotivationPopup(
+          context,
+          isArabic: _isArabic,
+          overrideQuote: quote.isNotEmpty ? quote : null,
+        );
       }
     });
+    _checkAppLaunchNotification();
     _checkForegroundMotivation();
+  }
+
+  Future<void> _checkAppLaunchNotification() async {
+    try {
+      final launchDetails = await NotificationService.getAppLaunchNotificationDetails();
+      if (launchDetails != null && launchDetails.payload != null) {
+        final payload = launchDetails.payload!;
+        if (payload.startsWith('motivation')) {
+          String quote = '';
+          if (payload.startsWith('motivation:')) {
+            quote = payload.substring('motivation:'.length);
+          }
+          await Future.delayed(const Duration(milliseconds: 700)); // wait for navigation ready
+          if (mounted) {
+            MotivationPopupManager.showMotivationPopup(
+              context,
+              isArabic: _isArabic,
+              overrideQuote: quote.isNotEmpty ? quote : null,
+            );
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error checking app launch notification: $e');
+    }
   }
 
   Future<void> _checkForegroundMotivation() async {

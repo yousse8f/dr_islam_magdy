@@ -2,8 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/theme/app_colors.dart';
+import '../../../core/services/motivation_repository.dart';
 import '../services/notification_service.dart';
-import '../services/notification_history_service.dart';
 
 class MotivationPopupManager {
   static bool _isShowing = false;
@@ -11,6 +11,7 @@ class MotivationPopupManager {
   static Future<void> showMotivationPopup(
     BuildContext context, {
     required bool isArabic,
+    String? overrideQuote,
   }) async {
     if (_isShowing) return;
     _isShowing = true;
@@ -25,14 +26,18 @@ class MotivationPopupManager {
       debugPrint('Error saving last motivation date: $e');
     }
 
-    // 1. Get fixed daily motivation quote
+    // 1. Get motivation quote (either override from notification payload or today's quote)
     String quote;
-    try {
-      quote = await NotificationHistoryService.getTodayMotivationQuote(isArabic);
-    } catch (_) {
-      quote = isArabic
-          ? 'استمر في تحقيق هدفك! خطوة صغيرة يومياً تصنع فرقاً كبيراً 💪'
-          : 'Stay optimistic and start your day with energy.';
+    if (overrideQuote != null && overrideQuote.isNotEmpty) {
+      quote = overrideQuote;
+    } else {
+      try {
+        quote = await MotivationRepository.getRandomQuote();
+      } catch (_) {
+        quote = isArabic
+            ? 'استمر في تحقيق هدفك! خطوة صغيرة يومياً تصنع فرقاً كبيراً 💪'
+            : 'Stay optimistic and start your day with energy.';
+      }
     }
 
     // Play motivation sound effect once
@@ -47,7 +52,7 @@ class MotivationPopupManager {
       return;
     }
 
-    // Show Bottom Sheet containing Today's Motivational Quote
+    // Show Bottom Sheet containing Motivational Quote
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -206,7 +211,7 @@ class _NotificationCenterBottomSheetState
 
             // Daily Motivational Quote Section
             Text(
-              widget.isArabic ? '🌟 الجملة التحفيزية لليوم' : '🌟 Today\'s Motivational Quote',
+              widget.isArabic ? '🌟 الرسالة التحفيزية' : '🌟 Motivational Quote',
               style: const TextStyle(
                 fontSize: 14.5,
                 fontWeight: FontWeight.w900,

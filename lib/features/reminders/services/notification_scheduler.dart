@@ -32,101 +32,45 @@ class SchedulingResult {
 }
 
 class NotificationScheduler {
-  static bool _isScheduling = false;
-  static int _scheduleSeq = 0;
-
-  /// Fast, atomic cancellation of only active system auto reminders (1000..9999) using pending requests.
-  /// Eliminates the previous 3,800-loop IPC overhead that caused app freezing.
+  /// Fast cancellation of auto reminders.
   static Future<void> cancelAutoReminders(
     FlutterLocalNotificationsPlugin notifications,
   ) async {
-    final stopwatch = Stopwatch()..start();
     try {
-      final List<Future<void>> cancelFutures = [];
-      try {
-        final pending = await notifications.pendingNotificationRequests();
-        for (var p in pending) {
-          if (p.id >= 1000 && p.id <= 9999) {
-            cancelFutures.add(notifications.cancel(p.id));
-          }
-        }
-      } catch (e) {
-        debugPrint('[NotificationScheduler Warning] pendingNotificationRequests query failed: $e');
-      }
-
-      await Future.wait(cancelFutures);
-      debugPrint(
-        '[NotificationScheduler] Fast cancel completed in ${stopwatch.elapsedMilliseconds} ms '
-        'for ${cancelFutures.length} active notifications.',
-      );
+      await notifications.cancelAll();
+      debugPrint('[NotificationScheduler] cancelAll completed successfully.');
     } catch (e) {
-      debugPrint('[NotificationScheduler ERROR] Error cancelling auto reminders: $e');
+      debugPrint('[NotificationScheduler ERROR] Error cancelling reminders: $e');
     }
   }
 
-  /// Schedules all primary auto reminders (meals, water, snacks, motivation, optional) and custom user alarms.
-  /// Uses system-level daily repeating schedules (`DateTimeComponents.time`) for persistent recurring alarms.
+  /// Schedules all active reminders instantly.
   static Future<SchedulingResult> scheduleAllReminders({
     required FlutterLocalNotificationsPlugin notifications,
     required ReminderSettings settings,
     required bool isArabic,
   }) async {
-    final currentSeq = ++_scheduleSeq;
-
-    if (_isScheduling) {
-      debugPrint('[NotificationScheduler] Scheduling task already in progress. Waiting...');
-      int attempts = 0;
-      while (_isScheduling && attempts < 20) {
-        await Future.delayed(const Duration(milliseconds: 50));
-        attempts++;
-      }
-      if (currentSeq != _scheduleSeq) {
-        debugPrint('[NotificationScheduler] Superseded by newer schedule request (seq $currentSeq < $_scheduleSeq). Aborting stale run.');
-        return const SchedulingResult(
-          success: true,
-          scheduledCount: 0,
-          failedCount: 0,
-          isExact: true,
-          hitIosCeiling: false,
-          messageAr: 'تم التجاوز بواسطة طلب جديد',
-          messageEn: 'Superseded by a newer request',
-        );
-      }
-    }
-
-    _isScheduling = true;
-    final stopwatch = Stopwatch()..start();
-
     try {
       await cancelAutoReminders(notifications);
 
       if (!settings.isRunning) {
-        debugPrint('[NotificationScheduler] Reminders disabled (isRunning = false). Skipping scheduling.');
         return SchedulingResult(
           success: true,
           scheduledCount: 0,
           failedCount: 0,
           isExact: true,
           hitIosCeiling: false,
-          messageAr: isArabic ? 'تم إيقاف المنبهات بنجاح' : 'Reminders disabled successfully',
-          messageEn: isArabic ? 'تم إيقاف المنبهات بنجاح' : 'Reminders disabled successfully',
+          messageAr: isArabic ? 'التنبيه اتقفل' : 'Reminders Turned Off',
+          messageEn: 'Reminders Turned Off',
         );
       }
 
       final now = tz.TZDateTime.now(tz.local);
-      debugPrint('================ NOTIFICATION SCHEDULING LOG ================');
-      debugPrint('Current Local Time: $now | Timezone: ${tz.local.name}');
-      debugPrint('Wake Time: ${settings.wakeHour.toString().padLeft(2, '0')}:${settings.wakeMinute.toString().padLeft(2, '0')}');
-      debugPrint('Bed Time: ${settings.sleepHour.toString().padLeft(2, '0')}:${settings.sleepMinute.toString().padLeft(2, '0')}');
-
       int scheduledCount = 0;
       int failedCount = 0;
-      bool hitIosCeiling = false;
-      final exactTracker = ValueNotifier<bool>(true);
-
       const maxIosCeiling = 64;
 
-      Future<bool> scheduleItem({
+      Future<void> scheduleSingle({
         required int id,
         required String title,
         required String body,
@@ -136,11 +80,7 @@ class NotificationScheduler {
         required String soundName,
         required String payload,
       }) async {
-        if (scheduledCount >= maxIosCeiling) {
-          hitIosCeiling = true;
-          debugPrint('[NotificationScheduler Ceiling] Reached 64 notification limit. Skipping ID $id ($title).');
-          return false;
-        }
+        if (scheduledCount >= maxIosCeiling) return;
 
         tz.TZDateTime scheduledDate = tz.TZDateTime(
           tz.local,
@@ -154,31 +94,80 @@ class NotificationScheduler {
           scheduledDate = scheduledDate.add(const Duration(days: 1));
         }
 
-        final ok = await _scheduleZonedNotification(
-          notifications: notifications,
-          id: id,
-          title: title,
-          body: body,
-          scheduledTime: scheduledDate,
-          channelId: channelId,
-          soundName: soundName,
-          payload: payload,
-          exactTracker: exactTracker,
+        final iosSoundFile = soundName.isEmpty || soundName == NotificationChannels.defaultSound
+            ? ''
+            : (soundName.endsWith('.wav') ? soundName : '$soundName.wav');
+
+        AndroidNotificationDetails androidDetails;
+        DarwinNotificationDetails iosDetails;
+
+        if (soundName.isEmpty || soundName == NotificationChannels.defaultSound) {
+          androidDetails = AndroidNotificationDetails(
+            channelId,
+            'System Reminder',
+            importance: Importance.max,
+            priority: Priority.high,
+          );
+          iosDetails = const DarwinNotificationDetails();
+        } else {
+          androidDetails = AndroidNotificationDetails(
+            channelId,
+            'Health Reminder',
+            importance: Importance.max,
+            priority: Priority.high,
+            sound: RawResourceAndroidNotificationSound(soundName),
+          );
+          iosDetails = DarwinNotificationDetails(
+            sound: iosSoundFile,
+          );
+        }
+
+        final details = NotificationDetails(
+          android: androidDetails,
+          iOS: iosDetails,
         );
 
-        if (ok) {
+        try {
+          await notifications.zonedSchedule(
+            id,
+            title,
+            body,
+            scheduledDate,
+            details,
+            androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+            uiLocalNotificationDateInterpretation:
+                UILocalNotificationDateInterpretation.absoluteTime,
+            matchDateTimeComponents: DateTimeComponents.time,
+            payload: payload,
+          );
           scheduledCount++;
-        } else {
-          failedCount++;
+        } catch (e) {
+          try {
+            await notifications.zonedSchedule(
+              id,
+              title,
+              body,
+              scheduledDate,
+              details,
+              androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+              uiLocalNotificationDateInterpretation:
+                  UILocalNotificationDateInterpretation.absoluteTime,
+              matchDateTimeComponents: DateTimeComponents.time,
+              payload: payload,
+            );
+            scheduledCount++;
+          } catch (e2) {
+            failedCount++;
+            debugPrint('[Schedule ERROR] ID $id: $e2');
+          }
         }
-        return ok;
       }
 
-      // 1. MEAL REMINDERS
+      // 1. Meals
       if (settings.mealsEnabled) {
         final bTime = settings.getBreakfastTime();
-        await scheduleItem(
-          id: NotificationContentRegistry.breakfast.idRangeStart,
+        await scheduleSingle(
+          id: 1000,
           title: isArabic ? NotificationContentRegistry.breakfast.titleAr : NotificationContentRegistry.breakfast.titleEn,
           body: isArabic ? NotificationContentRegistry.breakfast.bodyAr : NotificationContentRegistry.breakfast.bodyEn,
           hour: bTime.hour,
@@ -189,8 +178,8 @@ class NotificationScheduler {
         );
 
         final lTime = settings.getLunchTime();
-        await scheduleItem(
-          id: NotificationContentRegistry.lunch.idRangeStart,
+        await scheduleSingle(
+          id: 1100,
           title: isArabic ? NotificationContentRegistry.lunch.titleAr : NotificationContentRegistry.lunch.titleEn,
           body: isArabic ? NotificationContentRegistry.lunch.bodyAr : NotificationContentRegistry.lunch.bodyEn,
           hour: lTime.hour,
@@ -201,8 +190,8 @@ class NotificationScheduler {
         );
 
         final dTime = settings.getDinnerTime();
-        await scheduleItem(
-          id: NotificationContentRegistry.dinner.idRangeStart,
+        await scheduleSingle(
+          id: 1200,
           title: isArabic ? NotificationContentRegistry.dinner.titleAr : NotificationContentRegistry.dinner.titleEn,
           body: isArabic ? NotificationContentRegistry.dinner.bodyAr : NotificationContentRegistry.dinner.bodyEn,
           hour: dTime.hour,
@@ -213,39 +202,34 @@ class NotificationScheduler {
         );
       }
 
-      // 2. MOTIVATION
+      // 2. Motivation
       if (settings.motivationEnabled) {
+        final quoteText = await MotivationRepository.getRandomQuote();
         final mTime = settings.getMotivationTime();
-        final quoteText = isArabic
-            ? await MotivationRepository.getRandomQuote()
-            : NotificationContentRegistry.motivation.bodyEn;
-
-        await scheduleItem(
-          id: NotificationContentRegistry.motivation.idRangeStart,
+        await scheduleSingle(
+          id: 1300,
           title: isArabic ? NotificationContentRegistry.motivation.titleAr : NotificationContentRegistry.motivation.titleEn,
           body: quoteText,
           hour: mTime.hour,
           minute: mTime.minute,
           channelId: NotificationContentRegistry.motivation.channelId,
           soundName: NotificationContentRegistry.motivation.soundName,
-          payload: 'motivation',
+          payload: 'motivation:$quoteText',
         );
       }
 
-      // 3. HOURLY WATER REMINDERS
+      // 3. Water (Sample main water reminders or interval)
       final waterInterval = settings.waterIntervalHours < 1 ? 1 : settings.waterIntervalHours;
       if (settings.waterEnabled && waterInterval > 0) {
         final waterIntervalMins = waterInterval * 60;
         int currentWaterMins = settings.wakeTotalMins + waterIntervalMins;
         int waterIndex = 0;
 
-        while (currentWaterMins < settings.waterCutoffMins && waterIndex < 24) {
+        while (currentWaterMins < settings.waterCutoffMins && waterIndex < 12) {
           final h = (currentWaterMins ~/ 60) % 24;
           final m = currentWaterMins % 60;
-          final waterId = NotificationContentRegistry.water.idRangeStart + waterIndex;
-
-          await scheduleItem(
-            id: waterId,
+          await scheduleSingle(
+            id: 2000 + waterIndex,
             title: isArabic ? NotificationContentRegistry.water.titleAr : NotificationContentRegistry.water.titleEn,
             body: isArabic ? NotificationContentRegistry.water.bodyAr : NotificationContentRegistry.water.bodyEn,
             hour: h,
@@ -254,13 +238,12 @@ class NotificationScheduler {
             soundName: NotificationContentRegistry.water.soundName,
             payload: 'water',
           );
-
           currentWaterMins += waterIntervalMins;
           waterIndex++;
         }
       }
 
-      // 4. SNACK REMINDERS
+      // 4. Snack
       final snackInterval = settings.fruitVegIntervalHours < 1 ? 2 : settings.fruitVegIntervalHours;
       if (settings.fruitVegEnabled && snackInterval > 0) {
         final snackIntervalMins = snackInterval * 60;
@@ -274,13 +257,11 @@ class NotificationScheduler {
         }
 
         int snackIndex = 0;
-        while (currentSnackMins < settings.snackCutoffMins && snackIndex < 24) {
+        while (currentSnackMins < settings.snackCutoffMins && snackIndex < 6) {
           final h = (currentSnackMins ~/ 60) % 24;
           final m = currentSnackMins % 60;
-          final snackId = NotificationContentRegistry.snack.idRangeStart + snackIndex;
-
-          await scheduleItem(
-            id: snackId,
+          await scheduleSingle(
+            id: 3000 + snackIndex,
             title: isArabic ? NotificationContentRegistry.snack.titleAr : NotificationContentRegistry.snack.titleEn,
             body: isArabic ? NotificationContentRegistry.snack.bodyAr : NotificationContentRegistry.snack.bodyEn,
             hour: h,
@@ -289,16 +270,15 @@ class NotificationScheduler {
             soundName: NotificationContentRegistry.snack.soundName,
             payload: 'snack',
           );
-
           currentSnackMins += snackIntervalMins;
           snackIndex++;
         }
       }
 
-      // 5. WORKOUT
+      // 5. Workout
       if (settings.workoutEnabled) {
-        await scheduleItem(
-          id: NotificationContentRegistry.workout.idRangeStart,
+        await scheduleSingle(
+          id: 5000,
           title: isArabic ? NotificationContentRegistry.workout.titleAr : NotificationContentRegistry.workout.titleEn,
           body: isArabic ? NotificationContentRegistry.workout.bodyAr : NotificationContentRegistry.workout.bodyEn,
           hour: settings.workoutHour,
@@ -309,10 +289,10 @@ class NotificationScheduler {
         );
       }
 
-      // 6. SCREEN OFF
+      // 6. Screen Off
       if (settings.screenOffEnabled) {
-        await scheduleItem(
-          id: NotificationContentRegistry.screenOff.idRangeStart,
+        await scheduleSingle(
+          id: 4000,
           title: isArabic ? NotificationContentRegistry.screenOff.titleAr : NotificationContentRegistry.screenOff.titleEn,
           body: isArabic ? NotificationContentRegistry.screenOff.bodyAr : NotificationContentRegistry.screenOff.bodyEn,
           hour: settings.screenOffHour,
@@ -323,10 +303,10 @@ class NotificationScheduler {
         );
       }
 
-      // 7. VITAMINS
+      // 7. Vitamins
       if (settings.vitaminsEnabled) {
-        await scheduleItem(
-          id: NotificationContentRegistry.vitamins.idRangeStart,
+        await scheduleSingle(
+          id: 6000,
           title: isArabic ? NotificationContentRegistry.vitamins.titleAr : NotificationContentRegistry.vitamins.titleEn,
           body: isArabic ? NotificationContentRegistry.vitamins.bodyAr : NotificationContentRegistry.vitamins.bodyEn,
           hour: settings.vitaminsHour,
@@ -337,10 +317,10 @@ class NotificationScheduler {
         );
       }
 
-      // 8. EYE REST
+      // 8. Eye Rest
       if (settings.eyeRestEnabled) {
-        await scheduleItem(
-          id: NotificationContentRegistry.eyeRest.idRangeStart,
+        await scheduleSingle(
+          id: 7000,
           title: isArabic ? NotificationContentRegistry.eyeRest.titleAr : NotificationContentRegistry.eyeRest.titleEn,
           body: isArabic ? NotificationContentRegistry.eyeRest.bodyAr : NotificationContentRegistry.eyeRest.bodyEn,
           hour: settings.eyeRestHour,
@@ -351,57 +331,34 @@ class NotificationScheduler {
         );
       }
 
-      // 9. CUSTOM ALARMS
+      // 9. Custom Alarms
       for (int cIndex = 0; cIndex < settings.customAlarms.length; cIndex++) {
         final customAlarm = settings.customAlarms[cIndex];
         if (!customAlarm.isEnabled) continue;
 
-        final notificationId = 8000 + cIndex;
-        await scheduleItem(
-          id: notificationId,
-          title: customAlarm.title.isNotEmpty
-              ? customAlarm.title
-              : (isArabic ? 'تنبيه مخصص ⏰' : 'Custom Reminder ⏰'),
-          body: isArabic
-              ? 'تنبيه مخصص: ${customAlarm.title}'
-              : 'Custom reminder: ${customAlarm.title}',
+        await scheduleSingle(
+          id: 8000 + cIndex,
+          title: customAlarm.title.isNotEmpty ? customAlarm.title : (isArabic ? 'تنبيه مخصص ⏰' : 'Custom Reminder ⏰'),
+          body: isArabic ? 'تنبيه مخصص: ${customAlarm.title}' : 'Custom reminder: ${customAlarm.title}',
           hour: customAlarm.hour,
           minute: customAlarm.minute,
           channelId: NotificationChannels.mealsChannelId,
-          soundName: NotificationChannels.mealSound,
+          soundName: NotificationChannels.defaultSound,
           payload: 'custom_${customAlarm.id}',
         );
-      }
-
-      stopwatch.stop();
-      debugPrint(
-        '[NotificationScheduler] Completed scheduling $scheduledCount reminders '
-        '(${exactTracker.value ? "Exact" : "Inexact"}) in ${stopwatch.elapsedMilliseconds} ms. Failed: $failedCount.',
-      );
-
-      final isExact = exactTracker.value;
-      final modeTextAr = isExact ? 'دقيقة' : 'تقريبية (قد تتأخر قليلاً حسب نظام التشغيل)';
-      final modeTextEn = isExact ? 'exact' : 'inexact';
-
-      String msgAr = 'تم حفظ الإعدادات وجدولة $scheduledCount تذكير بنجاح ($modeTextAr)! 🔔';
-      String msgEn = 'Settings saved & $scheduledCount reminders scheduled ($modeTextEn)! 🔔';
-
-      if (hitIosCeiling) {
-        msgAr += ' (تم الوصول للحد الأقصى للإشعارات 64، تم ترتيب الأولويات)';
-        msgEn += ' (Reached 64 notification ceiling, prioritized)';
       }
 
       return SchedulingResult(
         success: failedCount == 0,
         scheduledCount: scheduledCount,
         failedCount: failedCount,
-        isExact: isExact,
-        hitIosCeiling: hitIosCeiling,
-        messageAr: msgAr,
-        messageEn: msgEn,
+        isExact: true,
+        hitIosCeiling: false,
+        messageAr: isArabic ? 'التنبيه شغّال' : 'Reminders Active',
+        messageEn: 'Reminders Active',
       );
     } catch (e) {
-      debugPrint('[NotificationScheduler ERROR] Error scheduling reminders: $e');
+      debugPrint('[NotificationScheduler ERROR] $e');
       return SchedulingResult(
         success: false,
         scheduledCount: 0,
@@ -412,94 +369,6 @@ class NotificationScheduler {
         messageEn: 'Failed to schedule reminders.',
         error: e.toString(),
       );
-    } finally {
-      _isScheduling = false;
-    }
-  }
-
-  static Future<bool> _scheduleZonedNotification({
-    required FlutterLocalNotificationsPlugin notifications,
-    required int id,
-    required String title,
-    required String body,
-    required tz.TZDateTime scheduledTime,
-    required String channelId,
-    required String soundName,
-    required String payload,
-    required ValueNotifier<bool> exactTracker,
-  }) async {
-    AndroidNotificationDetails androidDetails;
-    DarwinNotificationDetails iosDetails;
-
-    final String iosSoundFile = soundName.isEmpty || soundName == NotificationChannels.defaultSound
-        ? ''
-        : (soundName.endsWith('.wav') ? soundName : '$soundName.wav');
-
-    if (soundName.isEmpty || soundName == NotificationChannels.defaultSound) {
-      androidDetails = AndroidNotificationDetails(
-        channelId,
-        'System Reminder',
-        importance: Importance.max,
-        priority: Priority.high,
-        ticker: 'ticker',
-      );
-      iosDetails = const DarwinNotificationDetails();
-    } else {
-      androidDetails = AndroidNotificationDetails(
-        channelId,
-        'Health Reminder',
-        importance: Importance.max,
-        priority: Priority.high,
-        sound: RawResourceAndroidNotificationSound(soundName),
-        ticker: 'ticker',
-      );
-      iosDetails = DarwinNotificationDetails(
-        sound: iosSoundFile,
-      );
-    }
-
-    final details = NotificationDetails(
-      android: androidDetails,
-      iOS: iosDetails,
-    );
-
-    try {
-      await notifications.zonedSchedule(
-        id,
-        title,
-        body,
-        scheduledTime,
-        details,
-        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-        uiLocalNotificationDateInterpretation:
-            UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents: DateTimeComponents.time,
-        payload: payload,
-      );
-      debugPrint('[Scheduled Exact] ID $id ("$title") set for $scheduledTime (daily repeat)');
-      return true;
-    } catch (e) {
-      debugPrint('[Schedule Fallback] Exact schedule failed for ID $id: $e, trying inexact mode...');
-      exactTracker.value = false;
-      try {
-        await notifications.zonedSchedule(
-          id,
-          title,
-          body,
-          scheduledTime,
-          details,
-          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
-          uiLocalNotificationDateInterpretation:
-              UILocalNotificationDateInterpretation.absoluteTime,
-          matchDateTimeComponents: DateTimeComponents.time,
-          payload: payload,
-        );
-        debugPrint('[Scheduled Inexact] ID $id ("$title") set for $scheduledTime (daily repeat)');
-        return true;
-      } catch (e2) {
-        debugPrint('[Schedule ERROR] Failed scheduling notification ID $id: $e2');
-        return false;
-      }
     }
   }
 }

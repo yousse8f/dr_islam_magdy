@@ -139,7 +139,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
         _settings,
         widget.isArabic,
       ).timeout(
-        const Duration(seconds: 10),
+        const Duration(seconds: 30),
         onTimeout: () => SchedulingResult(
           success: false,
           scheduledCount: 0,

@@ -31,10 +31,10 @@ class NotificationService {
   static const String screenOffChannelId = NotificationChannels.screenOffChannelId;
   static const String eyeRestChannelId = NotificationChannels.eyeRestChannelId;
 
-  static VoidCallback? _onMotivationNotificationTapped;
+  static ValueChanged<String>? _onMotivationNotificationTappedWithQuote;
 
-  static void setOnMotivationNotificationTapped(VoidCallback callback) {
-    _onMotivationNotificationTapped = callback;
+  static void setOnMotivationNotificationTapped(ValueChanged<String> callback) {
+    _onMotivationNotificationTappedWithQuote = callback;
   }
 
   /// Initializes timezone data, local notifications plugin, and registers channels safely.
@@ -87,8 +87,12 @@ class NotificationService {
             );
 
             // Check if motivation notification was tapped
-            if (id == 1004 || (id >= 1300 && id <= 1399) || payload == 'motivation') {
-              _onMotivationNotificationTapped?.call();
+            if (id == 1004 || (id >= 1300 && id <= 1399) || payload.startsWith('motivation')) {
+              String quote = '';
+              if (payload.startsWith('motivation:')) {
+                quote = payload.substring('motivation:'.length);
+              }
+              _onMotivationNotificationTappedWithQuote?.call(quote);
             }
           }
         },
@@ -126,11 +130,10 @@ class NotificationService {
         final notifGranted = await androidPlugin.requestNotificationsPermission();
         if (notifGranted == false) granted = false;
 
-        // Try requesting exact alarms permission on Android 12+ (API 31+)
         try {
           await androidPlugin.requestExactAlarmsPermission();
         } catch (e) {
-          debugPrint('[NotificationService Permission] Exact alarm permission request error/not supported: $e');
+          debugPrint('[NotificationService Permission] Exact alarm permission request error: $e');
         }
       }
 
