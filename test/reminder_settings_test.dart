@@ -242,7 +242,7 @@ void main() {
       final wakeTotalMins = settings.wakeTotalMins; // 420 (07:00)
       final minSnackMins = wakeTotalMins + 90; // 510 (08:30)
 
-      final breakfastTime = settings.getBreakfastTime(); // 07:30
+      final breakfastTime = settings.getBreakfastTime()!; // 07:30
       int bMins = breakfastTime.hour * 60 + breakfastTime.minute; // 450
       int snackIntervalMins = 60;
       int currentSnackMins = bMins + snackIntervalMins; // 510 (08:30)
@@ -258,6 +258,10 @@ void main() {
   group('Independent Toggle & Single-Type Modifications', () {
     test('Modifying workout settings does not change breakfast or water settings', () {
       final settings = ReminderSettings(
+        wakeHour: 7,
+        wakeMinute: 0,
+        sleepHour: 23,
+        sleepMinute: 0,
         workoutEnabled: false,
         workoutHour: 17,
       );
@@ -273,6 +277,10 @@ void main() {
 
     test('Disabling snack does not affect meal or water settings', () {
       final settings = ReminderSettings(
+        wakeHour: 7,
+        wakeMinute: 0,
+        sleepHour: 23,
+        sleepMinute: 0,
         fruitVegEnabled: true,
       );
 

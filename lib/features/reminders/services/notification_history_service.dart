@@ -14,7 +14,8 @@ class NotificationHistoryItem {
   final String timeString; // e.g., '07:30'
   final int timestamp; // millis
   final String dateStr; // 'YYYY-MM-DD'
-  final String status; // 'scheduled' or 'tapped'
+  final String status; // 'scheduled', 'tapped', 'read'
+  final int? readAt;
 
   NotificationHistoryItem({
     required this.id,
@@ -25,6 +26,7 @@ class NotificationHistoryItem {
     required this.timestamp,
     required this.dateStr,
     this.status = 'scheduled',
+    this.readAt,
   });
 
   Map<String, dynamic> toJson() => {
@@ -36,6 +38,7 @@ class NotificationHistoryItem {
         'timestamp': timestamp,
         'dateStr': dateStr,
         'status': status,
+        'readAt': readAt,
       };
 
   factory NotificationHistoryItem.fromJson(Map<String, dynamic> json) =>
@@ -48,6 +51,7 @@ class NotificationHistoryItem {
         timestamp: json['timestamp'] ?? 0,
         dateStr: json['dateStr'] ?? '',
         status: json['status'] ?? 'scheduled',
+        readAt: json['readAt'],
       );
 }
 
@@ -103,8 +107,10 @@ class NotificationHistoryService {
       final minuteStr = time.minute.toString().padLeft(2, '0');
       final timeString = '$hourStr:$minuteStr';
 
+      final uniqueId = id.contains(timeString) ? id : '${id}_${dateStr}_$timeString';
+
       final item = NotificationHistoryItem(
-        id: id,
+        id: uniqueId,
         type: type,
         title: title,
         body: body,
@@ -127,7 +133,7 @@ class NotificationHistoryService {
           .toList();
 
       int existingIndex = history.indexWhere((h) =>
-          h.id == id ||
+          h.id == uniqueId ||
           (h.dateStr == dateStr && h.type == type && h.timeString == timeString));
 
       if (existingIndex >= 0) {
@@ -164,6 +170,9 @@ class NotificationHistoryService {
   }) async {
     final now = DateTime.now();
     final dateStr = '${now.year}-${now.month}-${now.day}';
+    final hourStr = now.hour.toString().padLeft(2, '0');
+    final minuteStr = now.minute.toString().padLeft(2, '0');
+    final timeString = '$hourStr:$minuteStr';
     String type = 'general';
 
     if (notificationId >= 1000 && notificationId < 1100) {
@@ -191,7 +200,7 @@ class NotificationHistoryService {
     }
 
     await recordNotification(
-      id: '${type}_$dateStr',
+      id: '${type}_${dateStr}_$timeString',
       type: type,
       title: title,
       body: body,
@@ -205,29 +214,48 @@ class NotificationHistoryService {
     ReminderSettings settings,
     bool isArabic,
   ) async {
-    if (!settings.isRunning) return;
+    if (!settings.isRunning || !settings.hasSelectedWakeAndSleepTimes) return;
     try {
       final now = DateTime.now();
       final dateStr = '${now.year}-${now.month}-${now.day}';
       final baseDate = DateTime(now.year, now.month, now.day);
 
       final wakeDateTime = baseDate.add(
-        Duration(hours: settings.wakeHour, minutes: settings.wakeMinute),
+        Duration(hours: settings.wakeHour!, minutes: settings.wakeMinute!),
       );
-      final breakfastDateTime = wakeDateTime.add(const Duration(minutes: 30));
+      final breakfastTime = settings.getBreakfastTime();
+      if (breakfastTime == null) return;
+
+      final breakfastDateTime = DateTime(
+        now.year,
+        now.month,
+        now.day,
+        breakfastTime.hour,
+        breakfastTime.minute,
+      );
       final motivationDateTime = breakfastDateTime.add(const Duration(hours: 1));
-      final lunchDateTime = breakfastDateTime.add(const Duration(hours: 7));
+
+      final lunchTime = settings.getLunchTime();
+      final lunchDateTime = lunchTime != null
+          ? DateTime(now.year, now.month, now.day, lunchTime.hour, lunchTime.minute)
+          : breakfastDateTime.add(const Duration(hours: 7));
 
       int awakeDurationMins = settings.sleepTotalMins - settings.wakeTotalMins;
       final bedDateTime = wakeDateTime.add(
         Duration(minutes: awakeDurationMins),
       );
-      final dinnerDateTime = bedDateTime.subtract(const Duration(hours: 1));
+
+      final dinnerTime = settings.getDinnerTime();
+      final dinnerDateTime = dinnerTime != null
+          ? DateTime(now.year, now.month, now.day, dinnerTime.hour, dinnerTime.minute)
+          : bedDateTime.subtract(const Duration(hours: 1));
 
       // 1. Breakfast
       if (settings.mealsEnabled && !breakfastDateTime.isAfter(now)) {
+        final hStr = breakfastDateTime.hour.toString().padLeft(2, '0');
+        final mStr = breakfastDateTime.minute.toString().padLeft(2, '0');
         await recordNotification(
-          id: 'breakfast_$dateStr',
+          id: 'breakfast_${dateStr}_$hStr:$mStr',
           type: 'breakfast',
           title: isArabic ? NotificationContentRegistry.breakfast.titleAr : NotificationContentRegistry.breakfast.titleEn,
           body: isArabic ? NotificationContentRegistry.breakfast.bodyAr : NotificationContentRegistry.breakfast.bodyEn,
@@ -239,8 +267,10 @@ class NotificationHistoryService {
       // 2. Motivation
       if (settings.motivationEnabled && !motivationDateTime.isAfter(now)) {
         final quote = await getTodayMotivationQuote(isArabic);
+        final hStr = motivationDateTime.hour.toString().padLeft(2, '0');
+        final mStr = motivationDateTime.minute.toString().padLeft(2, '0');
         await recordNotification(
-          id: 'motivation_$dateStr',
+          id: 'motivation_${dateStr}_$hStr:$mStr',
           type: 'motivation',
           title: isArabic ? NotificationContentRegistry.motivation.titleAr : NotificationContentRegistry.motivation.titleEn,
           body: quote,
@@ -251,8 +281,10 @@ class NotificationHistoryService {
 
       // 3. Lunch
       if (settings.mealsEnabled && !lunchDateTime.isAfter(now)) {
+        final hStr = lunchDateTime.hour.toString().padLeft(2, '0');
+        final mStr = lunchDateTime.minute.toString().padLeft(2, '0');
         await recordNotification(
-          id: 'lunch_$dateStr',
+          id: 'lunch_${dateStr}_$hStr:$mStr',
           type: 'lunch',
           title: isArabic ? NotificationContentRegistry.lunch.titleAr : NotificationContentRegistry.lunch.titleEn,
           body: isArabic ? NotificationContentRegistry.lunch.bodyAr : NotificationContentRegistry.lunch.bodyEn,
@@ -263,8 +295,10 @@ class NotificationHistoryService {
 
       // 4. Dinner
       if (settings.mealsEnabled && !dinnerDateTime.isAfter(now)) {
+        final hStr = dinnerDateTime.hour.toString().padLeft(2, '0');
+        final mStr = dinnerDateTime.minute.toString().padLeft(2, '0');
         await recordNotification(
-          id: 'dinner_$dateStr',
+          id: 'dinner_${dateStr}_$hStr:$mStr',
           type: 'dinner',
           title: isArabic ? NotificationContentRegistry.dinner.titleAr : NotificationContentRegistry.dinner.titleEn,
           body: isArabic ? NotificationContentRegistry.dinner.bodyAr : NotificationContentRegistry.dinner.bodyEn,
@@ -273,18 +307,77 @@ class NotificationHistoryService {
         );
       }
 
-      // 5. Workout
-      if (settings.workoutEnabled) {
+      // 5. Water
+      if (settings.waterEnabled && settings.waterIntervalHours > 0) {
+        final waterIntervalMins = settings.waterIntervalHours * 60;
+        int currentWaterMins = settings.wakeTotalMins + waterIntervalMins;
+        int waterIndex = 0;
+        while (currentWaterMins < settings.waterCutoffMins && waterIndex < 12) {
+          final h = (currentWaterMins ~/ 60) % 24;
+          final m = currentWaterMins % 60;
+          final waterSched = DateTime(now.year, now.month, now.day, h, m);
+          if (!waterSched.isAfter(now)) {
+            final hStr = h.toString().padLeft(2, '0');
+            final mStr = m.toString().padLeft(2, '0');
+            await recordNotification(
+              id: 'water_${dateStr}_$hStr:$mStr',
+              type: 'water',
+              title: isArabic ? NotificationContentRegistry.water.titleAr : NotificationContentRegistry.water.titleEn,
+              body: isArabic ? NotificationContentRegistry.water.bodyAr : NotificationContentRegistry.water.bodyEn,
+              time: waterSched,
+              status: 'scheduled',
+            );
+          }
+          currentWaterMins += waterIntervalMins;
+          waterIndex++;
+        }
+      }
+
+      // 6. Snack
+      if (settings.fruitVegEnabled && settings.fruitVegIntervalHours > 0) {
+        final snackIntervalMins = settings.fruitVegIntervalHours * 60;
+        final minSnackMins = settings.wakeTotalMins + 90;
+        int bMins = breakfastTime.hour * 60 + breakfastTime.minute;
+        int currentSnackMins = bMins + snackIntervalMins;
+        while (currentSnackMins < minSnackMins) {
+          currentSnackMins += snackIntervalMins;
+        }
+        int snackIndex = 0;
+        while (currentSnackMins < settings.snackCutoffMins && snackIndex < 6) {
+          final h = (currentSnackMins ~/ 60) % 24;
+          final m = currentSnackMins % 60;
+          final snackSched = DateTime(now.year, now.month, now.day, h, m);
+          if (!snackSched.isAfter(now)) {
+            final hStr = h.toString().padLeft(2, '0');
+            final mStr = m.toString().padLeft(2, '0');
+            await recordNotification(
+              id: 'snack_${dateStr}_$hStr:$mStr',
+              type: 'snack',
+              title: isArabic ? NotificationContentRegistry.snack.titleAr : NotificationContentRegistry.snack.titleEn,
+              body: isArabic ? NotificationContentRegistry.snack.bodyAr : NotificationContentRegistry.snack.bodyEn,
+              time: snackSched,
+              status: 'scheduled',
+            );
+          }
+          currentSnackMins += snackIntervalMins;
+          snackIndex++;
+        }
+      }
+
+      // 7. Workout
+      if (settings.workoutEnabled && settings.workoutHour != null && settings.workoutMinute != null) {
         final wSched = DateTime(
           now.year,
           now.month,
           now.day,
-          settings.workoutHour,
-          settings.workoutMinute,
+          settings.workoutHour!,
+          settings.workoutMinute!,
         );
         if (!wSched.isAfter(now)) {
+          final hStr = wSched.hour.toString().padLeft(2, '0');
+          final mStr = wSched.minute.toString().padLeft(2, '0');
           await recordNotification(
-            id: 'workout_$dateStr',
+            id: 'workout_${dateStr}_$hStr:$mStr',
             type: 'workout',
             title: isArabic ? NotificationContentRegistry.workout.titleAr : NotificationContentRegistry.workout.titleEn,
             body: isArabic ? NotificationContentRegistry.workout.bodyAr : NotificationContentRegistry.workout.bodyEn,
@@ -294,18 +387,20 @@ class NotificationHistoryService {
         }
       }
 
-      // 6. Screen Off
-      if (settings.screenOffEnabled) {
+      // 8. Screen Off
+      if (settings.screenOffEnabled && settings.screenOffHour != null && settings.screenOffMinute != null) {
         final sSched = DateTime(
           now.year,
           now.month,
           now.day,
-          settings.screenOffHour,
-          settings.screenOffMinute,
+          settings.screenOffHour!,
+          settings.screenOffMinute!,
         );
         if (!sSched.isAfter(now)) {
+          final hStr = sSched.hour.toString().padLeft(2, '0');
+          final mStr = sSched.minute.toString().padLeft(2, '0');
           await recordNotification(
-            id: 'screenoff_$dateStr',
+            id: 'screenoff_${dateStr}_$hStr:$mStr',
             type: 'screen_off',
             title: isArabic ? NotificationContentRegistry.screenOff.titleAr : NotificationContentRegistry.screenOff.titleEn,
             body: isArabic ? NotificationContentRegistry.screenOff.bodyAr : NotificationContentRegistry.screenOff.bodyEn,
@@ -315,18 +410,20 @@ class NotificationHistoryService {
         }
       }
 
-      // 7. Vitamins
-      if (settings.vitaminsEnabled) {
+      // 9. Vitamins
+      if (settings.vitaminsEnabled && settings.vitaminsHour != null && settings.vitaminsMinute != null) {
         final vSched = DateTime(
           now.year,
           now.month,
           now.day,
-          settings.vitaminsHour,
-          settings.vitaminsMinute,
+          settings.vitaminsHour!,
+          settings.vitaminsMinute!,
         );
         if (!vSched.isAfter(now)) {
+          final hStr = vSched.hour.toString().padLeft(2, '0');
+          final mStr = vSched.minute.toString().padLeft(2, '0');
           await recordNotification(
-            id: 'vitamins_$dateStr',
+            id: 'vitamins_${dateStr}_$hStr:$mStr',
             type: 'vitamins',
             title: isArabic ? NotificationContentRegistry.vitamins.titleAr : NotificationContentRegistry.vitamins.titleEn,
             body: isArabic ? NotificationContentRegistry.vitamins.bodyAr : NotificationContentRegistry.vitamins.bodyEn,
@@ -336,18 +433,20 @@ class NotificationHistoryService {
         }
       }
 
-      // 8. Eye Rest
-      if (settings.eyeRestEnabled) {
+      // 10. Eye Rest
+      if (settings.eyeRestEnabled && settings.eyeRestHour != null && settings.eyeRestMinute != null) {
         final eSched = DateTime(
           now.year,
           now.month,
           now.day,
-          settings.eyeRestHour,
-          settings.eyeRestMinute,
+          settings.eyeRestHour!,
+          settings.eyeRestMinute!,
         );
         if (!eSched.isAfter(now)) {
+          final hStr = eSched.hour.toString().padLeft(2, '0');
+          final mStr = eSched.minute.toString().padLeft(2, '0');
           await recordNotification(
-            id: 'eyerest_$dateStr',
+            id: 'eyerest_${dateStr}_$hStr:$mStr',
             type: 'eye_rest',
             title: isArabic ? NotificationContentRegistry.eyeRest.titleAr : NotificationContentRegistry.eyeRest.titleEn,
             body: isArabic ? NotificationContentRegistry.eyeRest.bodyAr : NotificationContentRegistry.eyeRest.bodyEn,
@@ -385,6 +484,73 @@ class NotificationHistoryService {
       return history;
     } catch (e) {
       debugPrint('Error getting today history: $e');
+      return [];
+    }
+  }
+
+  /// Marks a notification item as read (when user presses "تمام").
+  static Future<void> markAsRead(String id) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<String> list = prefs.getStringList(_historyKey) ?? [];
+      List<NotificationHistoryItem> history = list
+          .map((str) {
+            try {
+              return NotificationHistoryItem.fromJson(jsonDecode(str));
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<NotificationHistoryItem>()
+          .toList();
+
+      int index = history.indexWhere((h) => h.id == id);
+      if (index >= 0) {
+        final item = history[index];
+        history[index] = NotificationHistoryItem(
+          id: item.id,
+          type: item.type,
+          title: item.title,
+          body: item.body,
+          timeString: item.timeString,
+          timestamp: item.timestamp,
+          dateStr: item.dateStr,
+          status: 'read',
+          readAt: DateTime.now().millisecondsSinceEpoch,
+        );
+        await prefs.setStringList(
+          _historyKey,
+          history.map((h) => jsonEncode(h.toJson())).toList(),
+        );
+        debugPrint('[NotificationHistory] Marked notification as read: id=$id');
+      }
+    } catch (e) {
+      debugPrint('Error marking notification as read: $e');
+    }
+  }
+
+  /// Gets all unread history items (where status != 'read'), sorted chronologically (oldest first).
+  static Future<List<NotificationHistoryItem>> getUnreadHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      List<String> list = prefs.getStringList(_historyKey) ?? [];
+      List<NotificationHistoryItem> history = list
+          .map((str) {
+            try {
+              return NotificationHistoryItem.fromJson(jsonDecode(str));
+            } catch (_) {
+              return null;
+            }
+          })
+          .whereType<NotificationHistoryItem>()
+          .where((h) => h.status != 'read')
+          .toList();
+
+      // Sort chronologically: oldest due first
+      history.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+      return history;
+    } catch (e) {
+      debugPrint('Error getting unread history: $e');
       return [];
     }
   }

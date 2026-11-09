@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:firebase_core/firebase_core.dart';
 
+import 'core/navigation/app_navigator.dart';
 import 'core/services/app_config_service.dart';
 import 'core/theme/app_colors.dart';
 import 'features/splash/splash_screen.dart';
@@ -92,6 +93,7 @@ class _DrIslamAppState extends State<DrIslamApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: AppNavigator.navigatorKey,
       title: 'د. إسلام مجدي - Dr. Islam Magdy',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(

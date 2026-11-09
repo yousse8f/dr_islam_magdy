@@ -6,7 +6,9 @@ import '../calories/calorie_calculator_screen.dart';
 import '../calories/food_log_screen.dart';
 import '../calories/models/calorie_profile.dart';
 import '../reminders/meal_reminders_screen.dart';
-import '../reminders/widgets/motivation_popup.dart';
+import '../reminders/models/reminder_settings.dart';
+import '../reminders/services/latest_notification_service.dart';
+import '../reminders/services/notification_popup_manager.dart';
 import '../services/services_screen.dart';
 import '../webview/app_webview_screen.dart';
 
@@ -52,6 +54,57 @@ class HomeScreen extends StatelessWidget {
           builder: (context) => CalorieCalculatorScreen(isArabic: isArabic),
         ),
       );
+    }
+  }
+
+  Future<void> _openLatestNotification(BuildContext context) async {
+    try {
+      final settings = await ReminderSettings.load();
+      if (!settings.isRunning) {
+        if (!context.mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isArabic ? 'التنبيه اتقفل' : 'Reminders Turned Off',
+            ),
+            backgroundColor: AppColors.accentOrange,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+        return;
+      }
+
+      final latestData = await LatestNotificationService.evaluateAndGetLatestDueNotification(
+        settings: settings,
+        isArabic: isArabic,
+        allowPastInspected: true,
+      );
+
+      if (!context.mounted) return;
+
+      if (latestData != null) {
+        NotificationPopupManager.showNotificationPopup(
+          context,
+          data: latestData,
+          isArabic: isArabic,
+          bypassDeduplication: true,
+          playSound: false,
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isArabic ? 'لسه مفيش تنبيهات' : 'No notifications yet',
+            ),
+            backgroundColor: AppColors.forestGreen,
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Error opening latest notification: $e');
     }
   }
 
@@ -147,12 +200,7 @@ class HomeScreen extends StatelessWidget {
                 icon: const Icon(Icons.notifications_outlined, size: 21),
                 color: const Color(0xFFFDE047),
                 tooltip: isArabic ? 'الإشعارات' : 'Notifications',
-                onPressed: () {
-                  MotivationPopupManager.showMotivationPopup(
-                    context,
-                    isArabic: isArabic,
-                  );
-                },
+                onPressed: () => _openLatestNotification(context),
               ),
               Positioned(
                 top: 10,
@@ -392,26 +440,18 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // 4. خدماتنا
+                // 4. باقات المتابعة
                 Expanded(
                   child: _buildQuickCard(
                     context,
-                    title: isArabic ? 'خدماتنا\nالطبية' : 'Medical\nServices',
-                    icon: Icons.medical_services_rounded,
-                    iconColor: AppColors.forestGreen,
+                    title: isArabic ? 'باقات\nالمتابعة' : 'Follow-up\nPackages',
+                    icon: Icons.card_giftcard_rounded,
+                    iconColor: const Color(0xFFBE185D),
                     gradientColors: [
-                      const Color(0xFFECFDF5),
-                      const Color(0xFFD1FAE5),
+                      const Color(0xFFFDF2F8),
+                      const Color(0xFFFCE7F3),
                     ],
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) =>
-                              ServicesScreen(isArabic: isArabic),
-                        ),
-                      );
-                    },
+                    onTap: () => _openRoute(context, AppRouteRegistry.packages),
                   ),
                 ),
               ],
@@ -446,7 +486,30 @@ class HomeScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 6),
-                // 2. المقالات الطبية
+                // 2. خدماتنا الطبية
+                Expanded(
+                  child: _buildQuickCard(
+                    context,
+                    title: isArabic ? 'خدماتنا\nالطبية' : 'Medical\nServices',
+                    icon: Icons.medical_services_rounded,
+                    iconColor: AppColors.forestGreen,
+                    gradientColors: [
+                      const Color(0xFFECFDF5),
+                      const Color(0xFFD1FAE5),
+                    ],
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) =>
+                              ServicesScreen(isArabic: isArabic),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(width: 6),
+                // 3. المقالات الطبية
                 Expanded(
                   child: _buildQuickCard(
                     context,
@@ -458,21 +521,6 @@ class HomeScreen extends StatelessWidget {
                       const Color(0xFFF3E8FF),
                     ],
                     onTap: () => _openRoute(context, AppRouteRegistry.articles),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                // 3. باقات المتابعة
-                Expanded(
-                  child: _buildQuickCard(
-                    context,
-                    title: isArabic ? 'باقات\nالمتابعة' : 'Follow-up\nPackages',
-                    icon: Icons.card_giftcard_rounded,
-                    iconColor: const Color(0xFFBE185D),
-                    gradientColors: [
-                      const Color(0xFFFDF2F8),
-                      const Color(0xFFFCE7F3),
-                    ],
-                    onTap: () => _openRoute(context, AppRouteRegistry.packages),
                   ),
                 ),
                 const SizedBox(width: 6),

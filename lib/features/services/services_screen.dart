@@ -26,6 +26,9 @@ class ServicesScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isVerySmall = screenWidth < 360;
+
     return Directionality(
       textDirection: isArabic ? TextDirection.rtl : TextDirection.ltr,
       child: Scaffold(
@@ -42,14 +45,15 @@ class ServicesScreen extends StatelessWidget {
         ),
         body: ListView(
           padding: EdgeInsets.fromLTRB(
-            16,
+            isVerySmall ? 10 : 16,
             14,
-            16,
+            isVerySmall ? 10 : 16,
             80 + MediaQuery.of(context).padding.bottom,
           ),
           children: [
             _buildServiceListItem(
               context,
+              screenWidth: screenWidth,
               title: isArabic
                   ? 'علاج السمنة وتنسيق القوام'
                   : 'Obesity Treatment',
@@ -62,6 +66,7 @@ class ServicesScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _buildServiceListItem(
               context,
+              screenWidth: screenWidth,
               title: isArabic ? 'التغذية العلاجية' : 'Clinical Nutrition',
               subtitle: isArabic
                   ? 'خطط لحالات السكري والضغط وتكيس المبايض'
@@ -72,6 +77,7 @@ class ServicesScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _buildServiceListItem(
               context,
+              screenWidth: screenWidth,
               title: isArabic
                   ? 'جلسات إذابة الدهون وشد الترهلات'
                   : 'Fat Dissolving',
@@ -84,6 +90,7 @@ class ServicesScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _buildServiceListItem(
               context,
+              screenWidth: screenWidth,
               title: isArabic ? 'علاج النحافة' : 'Underweight Treatment',
               subtitle: isArabic
                   ? 'زيادة الوزن بشكل صحي وبناء الكتلة العضلية'
@@ -94,6 +101,7 @@ class ServicesScreen extends StatelessWidget {
             const SizedBox(height: 12),
             _buildServiceListItem(
               context,
+              screenWidth: screenWidth,
               title: isArabic ? 'العلاج الطبيعي' : 'Physical Therapy',
               subtitle: isArabic
                   ? 'لعلاج آلام الانزلاق الغضروفي والعمود الفقري'
@@ -109,17 +117,20 @@ class ServicesScreen extends StatelessWidget {
 
   Widget _buildServiceListItem(
     BuildContext context, {
+    required double screenWidth,
     required String title,
     required String subtitle,
     required IconData icon,
     required String imagePath,
   }) {
+    final isVerySmall = screenWidth < 360;
+
     return InkWell(
       onTap: () => _openBooking(context),
       borderRadius: BorderRadius.circular(18),
       child: Container(
-        height: 100,
-        padding: const EdgeInsets.all(8),
+        constraints: const BoxConstraints(minHeight: 96),
+        padding: EdgeInsets.all(isVerySmall ? 6 : 8),
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(18),
@@ -137,8 +148,8 @@ class ServicesScreen extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(14),
               child: SizedBox(
-                width: 84,
-                height: double.infinity,
+                width: isVerySmall ? 70 : 84,
+                height: 84,
                 child: Image.asset(
                   imagePath,
                   fit: BoxFit.cover,
@@ -148,7 +159,7 @@ class ServicesScreen extends StatelessWidget {
                       child: Center(
                         child: Icon(
                           icon,
-                          size: 28,
+                          size: 26,
                           color: AppColors.forestGreen,
                         ),
                       ),
@@ -157,7 +168,7 @@ class ServicesScreen extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            SizedBox(width: isVerySmall ? 8 : 12),
             // Title & Subtitle
             Expanded(
               child: Column(
@@ -166,32 +177,36 @@ class ServicesScreen extends StatelessWidget {
                 children: [
                   Text(
                     title,
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 16,
+                    style: TextStyle(
+                      fontSize: isVerySmall ? 14 : 16,
                       fontWeight: FontWeight.bold,
                       color: AppColors.textDark,
+                      height: 1.2,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     subtitle,
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 13,
+                    style: TextStyle(
+                      fontSize: isVerySmall ? 11.5 : 13,
                       color: AppColors.mutedText,
-                      height: 1.3,
+                      height: 1.25,
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(width: 8),
+            SizedBox(width: isVerySmall ? 4 : 8),
             // Book Button
             Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              padding: EdgeInsets.symmetric(
+                horizontal: isVerySmall ? 8 : 12,
+                vertical: isVerySmall ? 6 : 8,
+              ),
               decoration: BoxDecoration(
                 color: AppColors.accentOrange,
                 borderRadius: BorderRadius.circular(12),
@@ -204,15 +219,15 @@ class ServicesScreen extends StatelessWidget {
                 ],
               ),
               child: Text(
-                isArabic ? 'احجز الآن' : 'Book',
-                style: const TextStyle(
+                isArabic ? 'احجز' : 'Book',
+                style: TextStyle(
                   color: Colors.white,
-                  fontSize: 13,
+                  fontSize: isVerySmall ? 11 : 13,
                   fontWeight: FontWeight.bold,
                 ),
               ),
             ),
-            const SizedBox(width: 4),
+            const SizedBox(width: 2),
           ],
         ),
       ),

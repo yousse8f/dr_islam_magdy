@@ -62,7 +62,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
             }
           },
           onPageFinished: (String url) {
-            // Set responsive viewport & center page content cleanly across the full screen width
+            // Set responsive viewport & center page content cleanly across the full screen width without horizontal overflow
             _controller.runJavaScript('''
               (function() {
                 var meta = document.querySelector('meta[name="viewport"]');
@@ -74,13 +74,12 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
                   }
                 }
                 meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
-                document.documentElement.style.maxWidth = '100%';
-                document.documentElement.style.overflowX = 'hidden';
-                document.body.style.maxWidth = '100%';
-                document.body.style.margin = '0 auto';
-                document.body.style.overflowX = 'hidden';
-                document.body.style.zoom = '100%';
-                document.body.style.transformOrigin = 'top center';
+                
+                var style = document.createElement('style');
+                style.innerHTML = '*{max-width:100%!important;box-sizing:border-box!important;} body, html {overflow-x:hidden!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;} img, video, canvas, svg {height:auto!important;max-width:100%!important;} table {max-width:100%!important;overflow-x:auto!important;display:block!important;}';
+                if (document.head) {
+                  document.head.appendChild(style);
+                }
               })();
             ''');
             if (mounted) {

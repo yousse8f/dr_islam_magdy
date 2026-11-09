@@ -36,10 +36,10 @@ class CustomAlarm {
 
 class ReminderSettings {
   bool isRunning;
-  int wakeHour;
-  int wakeMinute;
-  int sleepHour;
-  int sleepMinute;
+  int? wakeHour;
+  int? wakeMinute;
+  int? sleepHour;
+  int? sleepMinute;
 
   // Auto reminders toggles
   bool mealsEnabled;
@@ -48,34 +48,36 @@ class ReminderSettings {
   bool fruitVegEnabled;
   int fruitVegIntervalHours;
 
-  // Optional / Additional Reminders (كما طلب المستخدم)
+  // Optional / Additional Reminders
   bool motivationEnabled;
 
   bool workoutEnabled;
-  int workoutHour;
-  int workoutMinute;
+  int? workoutHour;
+  int? workoutMinute;
 
   bool screenOffEnabled;
-  int screenOffHour;
-  int screenOffMinute;
+  int? screenOffHour;
+  int? screenOffMinute;
 
   bool vitaminsEnabled;
-  int vitaminsHour;
-  int vitaminsMinute;
+  int? vitaminsHour;
+  int? vitaminsMinute;
 
   bool eyeRestEnabled;
-  int eyeRestHour;
-  int eyeRestMinute;
+  int? eyeRestHour;
+  int? eyeRestMinute;
 
   // Custom User Alarms
   List<CustomAlarm> customAlarms;
+  int? scheduleVersion;
+  int? scheduleActivatedAt;
 
   ReminderSettings({
-    this.isRunning = false,
-    this.wakeHour = 7,
-    this.wakeMinute = 0,
-    this.sleepHour = 23,
-    this.sleepMinute = 0,
+    this.isRunning = true, // Default ON
+    this.wakeHour, // null by default for new install
+    this.wakeMinute,
+    this.sleepHour, // null by default for new install
+    this.sleepMinute,
     this.mealsEnabled = true,
     this.waterEnabled = true,
     this.waterIntervalHours = 1,
@@ -83,24 +85,30 @@ class ReminderSettings {
     this.fruitVegIntervalHours = 2,
     this.motivationEnabled = true,
     this.workoutEnabled = false,
-    this.workoutHour = 17,
-    this.workoutMinute = 0,
+    this.workoutHour,
+    this.workoutMinute,
     this.screenOffEnabled = false,
-    this.screenOffHour = 22,
-    this.screenOffMinute = 30,
+    this.screenOffHour,
+    this.screenOffMinute,
     this.vitaminsEnabled = false,
-    this.vitaminsHour = 9,
-    this.vitaminsMinute = 0,
+    this.vitaminsHour,
+    this.vitaminsMinute,
     this.eyeRestEnabled = false,
-    this.eyeRestHour = 14,
-    this.eyeRestMinute = 0,
+    this.eyeRestHour,
+    this.eyeRestMinute,
     List<CustomAlarm>? customAlarms,
+    this.scheduleVersion,
+    this.scheduleActivatedAt,
   }) : customAlarms = customAlarms ?? [];
 
-  int get wakeTotalMins => wakeHour * 60 + wakeMinute;
+  bool get hasWakeTime => wakeHour != null && wakeMinute != null;
+  bool get hasSleepTime => sleepHour != null && sleepMinute != null;
+  bool get hasSelectedWakeAndSleepTimes => hasWakeTime && hasSleepTime;
+
+  int get wakeTotalMins => (wakeHour ?? 0) * 60 + (wakeMinute ?? 0);
 
   int get sleepTotalMins {
-    int mins = sleepHour * 60 + sleepMinute;
+    int mins = (sleepHour ?? 0) * 60 + (sleepMinute ?? 0);
     if (mins <= wakeTotalMins) {
       mins += 1440; // Handles sleep past midnight
     }
@@ -108,29 +116,33 @@ class ReminderSettings {
   }
 
   /// 1. Breakfast: 30 minutes after wake-up time.
-  TimeOfDay getBreakfastTime() {
+  TimeOfDay? getBreakfastTime() {
+    if (!hasSelectedWakeAndSleepTimes) return null;
     int bMins = (wakeTotalMins + 30) % 1440;
     return TimeOfDay(hour: bMins ~/ 60, minute: bMins % 60);
   }
 
   /// 2. Lunch: 7 hours after calculated Breakfast time.
-  TimeOfDay getLunchTime() {
+  TimeOfDay? getLunchTime() {
     final bTime = getBreakfastTime();
+    if (bTime == null) return null;
     int bMins = bTime.hour * 60 + bTime.minute;
     int lMins = (bMins + 420) % 1440;
     return TimeOfDay(hour: lMins ~/ 60, minute: lMins % 60);
   }
 
   /// 3. Dinner: 1 hour before bedtime.
-  TimeOfDay getDinnerTime() {
+  TimeOfDay? getDinnerTime() {
+    if (!hasSelectedWakeAndSleepTimes) return null;
     int dMinsFull = sleepTotalMins - 60;
     int dMins = dMinsFull % 1440;
     return TimeOfDay(hour: dMins ~/ 60, minute: dMins % 60);
   }
 
   /// 4. Motivation & Support: 1 hour after calculated Breakfast time.
-  TimeOfDay getMotivationTime() {
+  TimeOfDay? getMotivationTime() {
     final bTime = getBreakfastTime();
+    if (bTime == null) return null;
     int bMins = bTime.hour * 60 + bTime.minute;
     int mMins = (bMins + 60) % 1440;
     return TimeOfDay(hour: mMins ~/ 60, minute: mMins % 60);
@@ -144,6 +156,7 @@ class ReminderSettings {
 
   /// Checks if wake and sleep settings produce a timing conflict.
   bool hasScheduleConflict() {
+    if (!hasSelectedWakeAndSleepTimes) return false;
     int awakeDuration = sleepTotalMins - wakeTotalMins;
     if (awakeDuration < 480) return true; // Less than 8 hours awake
     int bMinsFull = wakeTotalMins + 30;
@@ -156,6 +169,7 @@ class ReminderSettings {
   }
 
   String? getScheduleConflictMessage(bool isArabic) {
+    if (!hasSelectedWakeAndSleepTimes) return null;
     if (!hasScheduleConflict()) return null;
     int awakeDuration = sleepTotalMins - wakeTotalMins;
     if (awakeDuration < 480) {
@@ -193,6 +207,8 @@ class ReminderSettings {
         'eyeRestHour': eyeRestHour,
         'eyeRestMinute': eyeRestMinute,
         'customAlarms': customAlarms.map((a) => a.toJson()).toList(),
+        'scheduleVersion': scheduleVersion,
+        'scheduleActivatedAt': scheduleActivatedAt,
       };
 
   factory ReminderSettings.fromJson(Map<String, dynamic> json) {
@@ -204,11 +220,11 @@ class ReminderSettings {
     }
 
     return ReminderSettings(
-      isRunning: json['isRunning'] ?? false,
-      wakeHour: json['wakeHour'] ?? 7,
-      wakeMinute: json['wakeMinute'] ?? 0,
-      sleepHour: json['sleepHour'] ?? 23,
-      sleepMinute: json['sleepMinute'] ?? 0,
+      isRunning: json['isRunning'] ?? true,
+      wakeHour: json['wakeHour'] as int?,
+      wakeMinute: json['wakeMinute'] as int?,
+      sleepHour: json['sleepHour'] as int?,
+      sleepMinute: json['sleepMinute'] as int?,
       mealsEnabled: json['mealsEnabled'] ?? true,
       waterEnabled: json['waterEnabled'] ?? true,
       waterIntervalHours: json['waterIntervalHours'] ?? 1,
@@ -216,18 +232,20 @@ class ReminderSettings {
       fruitVegIntervalHours: json['fruitVegIntervalHours'] ?? 2,
       motivationEnabled: json['motivationEnabled'] ?? true,
       workoutEnabled: json['workoutEnabled'] ?? false,
-      workoutHour: json['workoutHour'] ?? 17,
-      workoutMinute: json['workoutMinute'] ?? 0,
+      workoutHour: json['workoutHour'] as int?,
+      workoutMinute: json['workoutMinute'] as int?,
       screenOffEnabled: json['screenOffEnabled'] ?? false,
-      screenOffHour: json['screenOffHour'] ?? 22,
-      screenOffMinute: json['screenOffMinute'] ?? 30,
+      screenOffHour: json['screenOffHour'] as int?,
+      screenOffMinute: json['screenOffMinute'] as int?,
       vitaminsEnabled: json['vitaminsEnabled'] ?? false,
-      vitaminsHour: json['vitaminsHour'] ?? 9,
-      vitaminsMinute: json['vitaminsMinute'] ?? 0,
+      vitaminsHour: json['vitaminsHour'] as int?,
+      vitaminsMinute: json['vitaminsMinute'] as int?,
       eyeRestEnabled: json['eyeRestEnabled'] ?? false,
-      eyeRestHour: json['eyeRestHour'] ?? 14,
-      eyeRestMinute: json['eyeRestMinute'] ?? 0,
+      eyeRestHour: json['eyeRestHour'] as int?,
+      eyeRestMinute: json['eyeRestMinute'] as int?,
       customAlarms: loadedCustoms,
+      scheduleVersion: json['scheduleVersion'] as int?,
+      scheduleActivatedAt: json['scheduleActivatedAt'] as int?,
     );
   }
 
@@ -236,7 +254,7 @@ class ReminderSettings {
   static Future<ReminderSettings> load() async {
     final prefs = await SharedPreferences.getInstance();
     final String? str = prefs.getString(_key);
-    if (str == null) return ReminderSettings();
+    if (str == null) return ReminderSettings(); // Returns default fresh install settings (isRunning: true, wake/sleep: null)
     try {
       return ReminderSettings.fromJson(jsonDecode(str));
     } catch (_) {

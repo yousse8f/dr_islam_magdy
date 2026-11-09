@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'models/reminder_settings.dart';
+import 'services/latest_notification_service.dart';
+import 'services/notification_popup_manager.dart';
 import 'services/notification_service.dart';
 
 class MealRemindersScreen extends StatefulWidget {
@@ -16,6 +18,8 @@ class MealRemindersScreen extends StatefulWidget {
 class _MealRemindersScreenState extends State<MealRemindersScreen> {
   ReminderSettings _settings = ReminderSettings();
   bool _isLoading = true;
+  bool _hasNotificationPermission = true;
+  bool _isAutoMealsExpanded = false;
 
   @override
   void initState() {
@@ -26,9 +30,11 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
   Future<void> _loadSettings() async {
     try {
       final settings = await ReminderSettings.load();
+      final hasPerm = await NotificationService.checkExactAlarmPermission();
       if (mounted) {
         setState(() {
           _settings = settings;
+          _hasNotificationPermission = hasPerm;
         });
       }
     } catch (e) {
@@ -43,10 +49,12 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
   }
 
   Future<void> _pickTime({required bool isWake}) async {
-    final initialTime = TimeOfDay(
-      hour: isWake ? _settings.wakeHour : _settings.sleepHour,
-      minute: isWake ? _settings.wakeMinute : _settings.sleepMinute,
-    );
+    final currentHour = isWake ? _settings.wakeHour : _settings.sleepHour;
+    final currentMinute = isWake ? _settings.wakeMinute : _settings.sleepMinute;
+
+    final initialTime = (currentHour != null && currentMinute != null)
+        ? TimeOfDay(hour: currentHour, minute: currentMinute)
+        : (isWake ? const TimeOfDay(hour: 7, minute: 0) : const TimeOfDay(hour: 23, minute: 0));
 
     final picked = await showTimePicker(
       context: context,
@@ -78,14 +86,31 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
       });
       await _settings.save();
 
-      // Automatically recalculate and apply if running
-      if (_settings.isRunning) {
+      // Automatically recalculate and apply if running and times are selected
+      if (_settings.isRunning && _settings.hasSelectedWakeAndSleepTimes) {
         await _applyReminders(silent: true);
       }
     }
   }
 
   Future<void> _applyReminders({bool silent = false}) async {
+    if (!_settings.hasSelectedWakeAndSleepTimes) {
+      if (mounted && !silent) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              widget.isArabic
+                  ? 'برجاء اختيار موعد الاستيقاظ والنوم أولاً.'
+                  : 'Please select wake and sleep times first.',
+            ),
+            backgroundColor: AppColors.accentOrange,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+      return;
+    }
+
     setState(() => _isLoading = true);
     final flowStopwatch = Stopwatch()..start();
 
@@ -129,7 +154,10 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
       // 2. Measure Settings Save Duration
       final saveStopwatch = Stopwatch()..start();
       _settings.isRunning = true;
+      _settings.scheduleActivatedAt = DateTime.now().millisecondsSinceEpoch;
+      _settings.scheduleVersion = DateTime.now().millisecondsSinceEpoch;
       await _settings.save();
+      await LatestNotificationService.setLastAutoEvaluatedTime(DateTime.now().millisecondsSinceEpoch);
       saveStopwatch.stop();
       debugPrint('[Activation Flow] Settings saved in ${saveStopwatch.elapsedMilliseconds} ms.');
 
@@ -152,6 +180,13 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
       );
       scheduleStopwatch.stop();
       flowStopwatch.stop();
+
+      if (mounted) {
+        await NotificationPopupManager.notifySettingsUpdated(
+          isArabic: widget.isArabic,
+          context: context,
+        );
+      }
 
       debugPrint(
         '[Activation Flow Summary] Total execution time: ${flowStopwatch.elapsedMilliseconds} ms '
@@ -214,7 +249,10 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
     final stopwatch = Stopwatch()..start();
     try {
       _settings.isRunning = false;
+      _settings.scheduleActivatedAt = null;
+      _settings.scheduleVersion = DateTime.now().millisecondsSinceEpoch;
       await _settings.save();
+      await LatestNotificationService.clearLatestNotification();
       await NotificationService.cancelAutoReminders().timeout(
         const Duration(seconds: 5),
         onTimeout: () {
@@ -223,6 +261,13 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
       );
       stopwatch.stop();
       debugPrint('[Stop Reminders] All reminders stopped in ${stopwatch.elapsedMilliseconds} ms.');
+
+      if (mounted) {
+        await NotificationPopupManager.notifySettingsUpdated(
+          isArabic: widget.isArabic,
+          context: context,
+        );
+      }
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -255,7 +300,10 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
     return '$h:$m $period';
   }
 
-  String _formatHourMinute(int hour, int minute) {
+  String _formatHourMinute(int? hour, int? minute) {
+    if (hour == null || minute == null) {
+      return widget.isArabic ? 'لم يتم التحديد' : 'Not specified';
+    }
     return _formatTimeOfDay(TimeOfDay(hour: hour, minute: minute));
   }
 
@@ -444,79 +492,111 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                 padding: const EdgeInsets.fromLTRB(16, 16, 16, 100),
                 children: [
                   // 1. Status Banner Card
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: _settings.isRunning
-                          ? AppColors.forestGreen
-                          : AppColors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: const [
-                        BoxShadow(
-                          color: AppColors.cardShadow,
-                          blurRadius: 10,
-                          offset: Offset(0, 4),
-                        ),
-                      ],
-                      border: Border.all(
-                        color: _settings.isRunning
-                            ? AppColors.forestGreen
-                            : AppColors.forestGreen.withValues(alpha: 0.2),
-                      ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          _settings.isRunning
-                              ? Icons.notifications_active_rounded
-                              : Icons.notifications_off_rounded,
-                          color: _settings.isRunning
-                              ? AppColors.white
-                              : AppColors.mutedText,
-                          size: 32,
-                        ),
-                        const SizedBox(width: 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                _settings.isRunning
-                                    ? (widget.isArabic
-                                          ? 'التنبيه شغّال'
-                                          : 'Reminders Active')
-                                    : (widget.isArabic
-                                          ? 'التنبيه اتقفل'
-                                          : 'Reminders Paused'),
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                  color: _settings.isRunning
-                                      ? AppColors.white
-                                      : AppColors.textDark,
-                                ),
-                              ),
-                              const SizedBox(height: 2),
-                              Text(
-                                _settings.isRunning
-                                    ? (widget.isArabic
-                                          ? 'تصلك التنبيهات تلقائياً في المواعيد المحسوبة'
-                                          : 'Notifications scheduled automatically')
-                                    : (widget.isArabic
-                                          ? 'اضغط على زر شغل التنبيه للبدء'
-                                          : 'Tap Turn On Reminders to start'),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: _settings.isRunning
-                                      ? AppColors.white.withValues(alpha: 0.85)
-                                      : AppColors.mutedText,
-                                ),
-                              ),
-                            ],
+                  Builder(
+                    builder: (context) {
+                      final isRunning = _settings.isRunning;
+                      final hasTimes = _settings.hasSelectedWakeAndSleepTimes;
+                      final hasPerm = _hasNotificationPermission;
+
+                      String title;
+                      String subtitle;
+                      Color bgColor;
+                      Color textColor;
+                      IconData icon;
+
+                      if (!isRunning) {
+                        title = widget.isArabic ? 'التنبيه اتقفل' : 'Reminders Paused';
+                        subtitle = widget.isArabic
+                            ? 'اضغط على زر شغل التنبيه للبدء'
+                            : 'Tap Turn On Reminders to start';
+                        bgColor = AppColors.white;
+                        textColor = AppColors.textDark;
+                        icon = Icons.notifications_off_rounded;
+                      } else if (!hasTimes) {
+                        title = widget.isArabic ? 'في انتظار تحديد المواعيد' : 'Awaiting Schedule Selection';
+                        subtitle = widget.isArabic
+                            ? 'اختار ميعاد الصحيان والنوم عشان التنبيهات تبدأ'
+                            : 'Select wake & sleep times for reminders to start';
+                        bgColor = const Color(0xFFFFFBEB);
+                        textColor = const Color(0xFF92400E);
+                        icon = Icons.schedule_rounded;
+                      } else if (!hasPerm) {
+                        title = widget.isArabic ? 'إذن الإشعارات مطلوب' : 'Permission Required';
+                        subtitle = widget.isArabic
+                            ? 'يرجى إعطاء الإذن للتطبيق من إعدادات الهاتف لتصلك المنبهات'
+                            : 'Please grant notification permission in phone settings';
+                        bgColor = const Color(0xFFFEF2F2);
+                        textColor = const Color(0xFF991B1B);
+                        icon = Icons.notification_important_rounded;
+                      } else {
+                        title = widget.isArabic ? 'التنبيه شغّال' : 'Reminders Active';
+                        subtitle = widget.isArabic
+                            ? 'تصلك التنبيهات تلقائياً في المواعيد المحسوبة'
+                            : 'Notifications scheduled automatically';
+                        bgColor = AppColors.forestGreen;
+                        textColor = AppColors.white;
+                        icon = Icons.notifications_active_rounded;
+                      }
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: bgColor,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.cardShadow,
+                              blurRadius: 10,
+                              offset: Offset(0, 4),
+                            ),
+                          ],
+                          border: Border.all(
+                            color: isRunning && hasTimes && hasPerm
+                                ? AppColors.forestGreen
+                                : AppColors.forestGreen.withValues(alpha: 0.2),
                           ),
                         ),
-                      ],
-                    ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              icon,
+                              color: isRunning && hasTimes && hasPerm
+                                  ? AppColors.white
+                                  : textColor,
+                              size: 32,
+                            ),
+                            const SizedBox(width: 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    title,
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: isRunning && hasTimes && hasPerm
+                                          ? AppColors.white
+                                          : textColor,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    subtitle,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      color: isRunning && hasTimes && hasPerm
+                                          ? AppColors.white.withValues(alpha: 0.85)
+                                          : textColor.withValues(alpha: 0.85),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
                   ),
 
                   const SizedBox(height: 16),
@@ -694,18 +774,54 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
 
                   const SizedBox(height: 24),
 
-                  // 4. Primary Calculated Alarms Header
+                  // 4. Primary Calculated Alarms Header with Hamburger Toggle
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        widget.isArabic
-                            ? 'الوجبات والمواعيد المحسوبة تلقائياً'
-                            : 'Auto-Calculated Schedules',
-                        style: const TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.textDark,
+                      InkWell(
+                        onTap: () {
+                          setState(() {
+                            _isAutoMealsExpanded = !_isAutoMealsExpanded;
+                          });
+                        },
+                        borderRadius: BorderRadius.circular(12),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4, horizontal: 2),
+                          child: Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(7),
+                                decoration: BoxDecoration(
+                                  color: AppColors.forestGreen.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: const Icon(
+                                  Icons.menu_rounded,
+                                  color: AppColors.forestGreen,
+                                  size: 20,
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Text(
+                                widget.isArabic
+                                    ? 'الوجبات والمواعيد المحسوبة تلقائياً'
+                                    : 'Auto-Calculated Schedules',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.textDark,
+                                ),
+                              ),
+                              const SizedBox(width: 6),
+                              Icon(
+                                _isAutoMealsExpanded
+                                    ? Icons.keyboard_arrow_up_rounded
+                                    : Icons.keyboard_arrow_down_rounded,
+                                color: AppColors.forestGreen,
+                                size: 20,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                       Container(
@@ -728,6 +844,135 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       ),
                     ],
                   ),
+
+                  const SizedBox(height: 10),
+
+                  if (_isAutoMealsExpanded) ...[
+                    if (!_settings.hasSelectedWakeAndSleepTimes) ...[
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFFBEB),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: const Color(0xFFFCD34D)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(
+                              Icons.info_outline_rounded,
+                              color: Color(0xFFD97706),
+                              size: 22,
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                widget.isArabic
+                                    ? 'اختار ميعاد الصحيان والنوم عشان التنبيهات والمواعيد تبدأ تتحدد وتتجدول تلقائياً.'
+                                    : 'Select wake & sleep times for meal schedules to be auto-calculated.',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFF92400E),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ] else ...[
+                      Container(
+                        decoration: BoxDecoration(
+                          color: AppColors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.cardShadow,
+                              blurRadius: 8,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            ListTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFFEF3C7),
+                                child: Text('🍳', style: TextStyle(fontSize: 18)),
+                              ),
+                              title: Text(
+                                widget.isArabic ? 'تنبيه الإفطار' : 'Breakfast',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                widget.isArabic
+                                    ? 'بعد الاستيقاظ بـ ٣٠ دقيقة'
+                                    : '30 mins after wake-up',
+                                style: const TextStyle(fontSize: 12, color: AppColors.mutedText),
+                              ),
+                              trailing: Text(
+                                _formatTimeOfDay(_settings.getBreakfastTime()!),
+                                style: const TextStyle(
+                                  color: AppColors.forestGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFECFDF5),
+                                child: Text('🥗', style: TextStyle(fontSize: 18)),
+                              ),
+                              title: Text(
+                                widget.isArabic ? 'تنبيه الغداء' : 'Lunch',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                widget.isArabic
+                                    ? 'بعد الإفطار بـ ٧ ساعات'
+                                    : '7 hours after breakfast',
+                                style: const TextStyle(fontSize: 12, color: AppColors.mutedText),
+                              ),
+                              trailing: Text(
+                                _formatTimeOfDay(_settings.getLunchTime()!),
+                                style: const TextStyle(
+                                  color: AppColors.forestGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                            const Divider(height: 1),
+                            ListTile(
+                              leading: const CircleAvatar(
+                                backgroundColor: Color(0xFFFFF7ED),
+                                child: Text('🍲', style: TextStyle(fontSize: 18)),
+                              ),
+                              title: Text(
+                                widget.isArabic ? 'تنبيه العشاء' : 'Dinner',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
+                              ),
+                              subtitle: Text(
+                                widget.isArabic
+                                    ? 'قبل النوم بـ ساعة واحدة'
+                                    : '1 hour before bedtime',
+                                style: const TextStyle(fontSize: 12, color: AppColors.mutedText),
+                              ),
+                              trailing: Text(
+                                _formatTimeOfDay(_settings.getDinnerTime()!),
+                                style: const TextStyle(
+                                  color: AppColors.forestGreen,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -789,7 +1034,9 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                         await _applyReminders(silent: true);
                       }
                     },
-                    timeText: _formatTimeOfDay(_settings.getMotivationTime()),
+                    timeText: _settings.hasSelectedWakeAndSleepTimes
+                        ? _formatTimeOfDay(_settings.getMotivationTime()!)
+                        : (widget.isArabic ? 'لم يتم التحديد' : 'Not specified'),
                     onTimeTap: null, // Fixed time, no manual editing needed
                   ),
 
@@ -803,6 +1050,20 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     enabled: _settings.workoutEnabled,
                     onToggle: (val) async {
                       setState(() => _settings.workoutEnabled = val);
+                      if (val && _settings.workoutHour == null) {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: const TimeOfDay(hour: 17, minute: 0),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _settings.workoutHour = picked.hour;
+                            _settings.workoutMinute = picked.minute;
+                          });
+                        } else {
+                          setState(() => _settings.workoutEnabled = false);
+                        }
+                      }
                       await _settings.save();
                       if (_settings.isRunning) {
                         await _applyReminders(silent: true);
@@ -816,8 +1077,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       final picked = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay(
-                          hour: _settings.workoutHour,
-                          minute: _settings.workoutMinute,
+                          hour: _settings.workoutHour ?? 17,
+                          minute: _settings.workoutMinute ?? 0,
                         ),
                       );
                       if (picked != null) {
@@ -843,6 +1104,20 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     enabled: _settings.vitaminsEnabled,
                     onToggle: (val) async {
                       setState(() => _settings.vitaminsEnabled = val);
+                      if (val && _settings.vitaminsHour == null) {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: const TimeOfDay(hour: 9, minute: 0),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _settings.vitaminsHour = picked.hour;
+                            _settings.vitaminsMinute = picked.minute;
+                          });
+                        } else {
+                          setState(() => _settings.vitaminsEnabled = false);
+                        }
+                      }
                       await _settings.save();
                       if (_settings.isRunning) {
                         await _applyReminders(silent: true);
@@ -856,8 +1131,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       final picked = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay(
-                          hour: _settings.vitaminsHour,
-                          minute: _settings.vitaminsMinute,
+                          hour: _settings.vitaminsHour ?? 9,
+                          minute: _settings.vitaminsMinute ?? 0,
                         ),
                       );
                       if (picked != null) {
@@ -885,6 +1160,20 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     enabled: _settings.screenOffEnabled,
                     onToggle: (val) async {
                       setState(() => _settings.screenOffEnabled = val);
+                      if (val && _settings.screenOffHour == null) {
+                        final picked = await showTimePicker(
+                          context: context,
+                          initialTime: const TimeOfDay(hour: 22, minute: 30),
+                        );
+                        if (picked != null) {
+                          setState(() {
+                            _settings.screenOffHour = picked.hour;
+                            _settings.screenOffMinute = picked.minute;
+                          });
+                        } else {
+                          setState(() => _settings.screenOffEnabled = false);
+                        }
+                      }
                       await _settings.save();
                       if (_settings.isRunning) {
                         await _applyReminders(silent: true);
@@ -898,8 +1187,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       final picked = await showTimePicker(
                         context: context,
                         initialTime: TimeOfDay(
-                          hour: _settings.screenOffHour,
-                          minute: _settings.screenOffMinute,
+                          hour: _settings.screenOffHour ?? 22,
+                          minute: _settings.screenOffMinute ?? 30,
                         ),
                       );
                       if (picked != null) {
@@ -997,6 +1286,8 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       );
                     }),
                   ],
+
+                  // 6. Section 3: Healthy Meal Suggestions (Removed from Reminders screen, moved to Calorie/Add Food screen)
                 ],
               ),
       ),
@@ -1113,3 +1404,4 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
     );
   }
 }
+

@@ -5,6 +5,7 @@ import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../models/reminder_settings.dart';
+import 'app_notification_data.dart';
 import 'notification_channels.dart';
 import 'notification_history_service.dart';
 import 'notification_scheduler.dart';
@@ -32,9 +33,14 @@ class NotificationService {
   static const String eyeRestChannelId = NotificationChannels.eyeRestChannelId;
 
   static ValueChanged<String>? _onMotivationNotificationTappedWithQuote;
+  static ValueChanged<AppNotificationData>? _onAppNotificationTapped;
 
   static void setOnMotivationNotificationTapped(ValueChanged<String> callback) {
     _onMotivationNotificationTappedWithQuote = callback;
+  }
+
+  static void setOnAppNotificationTapped(ValueChanged<AppNotificationData> callback) {
+    _onAppNotificationTapped = callback;
   }
 
   /// Initializes timezone data, local notifications plugin, and registers channels safely.
@@ -43,16 +49,39 @@ class NotificationService {
 
     try {
       tz.initializeTimeZones();
-      String timeZoneName = 'UTC';
       try {
-        timeZoneName = await FlutterTimezone.getLocalTimezone();
-        tz.setLocalLocation(tz.getLocation(timeZoneName));
-        debugPrint('[NotificationService Timezone] Local timezone set: $timeZoneName');
-      } catch (e) {
-        debugPrint('[NotificationService Timezone Warning] Could not set local timezone: $e. Using UTC.');
+        final rawTimeZoneName = await FlutterTimezone.getLocalTimezone();
+        String canonicalName = rawTimeZoneName;
+        // Common System Timezone Alias Mappings
+        if (rawTimeZoneName.contains('Cairo') || rawTimeZoneName.contains('Egypt')) {
+          canonicalName = 'Africa/Cairo';
+        } else if (rawTimeZoneName.contains('Riyadh') || rawTimeZoneName.contains('Saudi') || rawTimeZoneName.contains('Arabian')) {
+          canonicalName = 'Asia/Riyadh';
+        } else if (rawTimeZoneName.contains('Dubai')) {
+          canonicalName = 'Asia/Dubai';
+        }
+
         try {
-          tz.setLocalLocation(tz.getLocation('UTC'));
-        } catch (_) {}
+          tz.setLocalLocation(tz.getLocation(canonicalName));
+          debugPrint('[NotificationService Timezone] Local timezone set successfully: $canonicalName (raw: $rawTimeZoneName)');
+        } catch (_) {
+          tz.setLocalLocation(tz.getLocation(rawTimeZoneName));
+          debugPrint('[NotificationService Timezone] Local timezone set via raw string: $rawTimeZoneName');
+        }
+      } catch (e) {
+        debugPrint('[NotificationService Timezone Warning] Could not set local timezone from FlutterTimezone: $e. Attempting offset fallback.');
+        try {
+          final offsetMinutes = DateTime.now().timeZoneOffset.inMinutes;
+          for (final location in tz.timeZoneDatabase.locations.values) {
+            if (location.currentTimeZone.offset ~/ 60000 == offsetMinutes) {
+              tz.setLocalLocation(location);
+              debugPrint('[NotificationService Timezone] Set local timezone via offset fallback: ${location.name}');
+              break;
+            }
+          }
+        } catch (e2) {
+          debugPrint('[NotificationService Timezone Fallback ERROR]: $e2');
+        }
       }
     } catch (e) {
       debugPrint('[NotificationService Timezone ERROR] $e');
@@ -86,11 +115,16 @@ class NotificationService {
               body: payload,
             );
 
+            final appData = AppNotificationData.parsePayload(payload);
+            _onAppNotificationTapped?.call(appData);
+
             // Check if motivation notification was tapped
             if (id == 1004 || (id >= 1300 && id <= 1399) || payload.startsWith('motivation')) {
               String quote = '';
               if (payload.startsWith('motivation:')) {
                 quote = payload.substring('motivation:'.length);
+              } else {
+                quote = appData.body;
               }
               _onMotivationNotificationTappedWithQuote?.call(quote);
             }

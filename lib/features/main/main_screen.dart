@@ -6,8 +6,10 @@ import '../../core/constants/app_routes.dart';
 import '../about/about_us_screen.dart';
 import '../contact/contact_us_screen.dart';
 import '../home/home_screen.dart';
-import '../services/services_screen.dart';
 import '../webview/app_webview_screen.dart';
+import '../reminders/services/app_notification_data.dart';
+import '../reminders/services/latest_notification_service.dart';
+import '../reminders/services/notification_popup_manager.dart';
 import '../reminders/services/notification_service.dart';
 import '../reminders/widgets/motivation_popup.dart';
 import '../reminders/models/reminder_settings.dart';
@@ -20,13 +22,26 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _currentIndex = 0;
   bool _isArabic = true;
+  final Set<int> _visitedTabs = {0};
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    NotificationService.setOnAppNotificationTapped((data) {
+      if (mounted) {
+        NotificationPopupManager.showNotificationPopup(
+          context,
+          data: data,
+          isArabic: _isArabic,
+        );
+      }
+    });
+
     NotificationService.setOnMotivationNotificationTapped((quote) {
       if (mounted) {
         MotivationPopupManager.showMotivationPopup(
@@ -36,8 +51,64 @@ class _MainScreenState extends State<MainScreen> {
         );
       }
     });
+
     _checkAppLaunchNotification();
     _checkForegroundMotivation();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      NotificationPopupManager.startForegroundWatcher(
+        context,
+        isArabic: _isArabic,
+      );
+      await Future.delayed(const Duration(milliseconds: 600));
+      if (mounted) {
+        await NotificationPopupManager.checkAndPresentLatestDuePopup(
+          context,
+          isArabic: _isArabic,
+        );
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    NotificationPopupManager.stopForegroundWatcher();
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    debugPrint('[MainScreen Lifecycle] App state changed to ${state.name}');
+    if (state == AppLifecycleState.resumed) {
+      _onAppResumed();
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.detached) {
+      NotificationPopupManager.stopForegroundWatcher();
+    }
+  }
+
+  Future<void> _onAppResumed() async {
+    try {
+      final settings = await ReminderSettings.load();
+      await LatestNotificationService.evaluateAndGetLatestDueNotification(
+        settings: settings,
+        isArabic: _isArabic,
+      );
+      if (mounted) {
+        NotificationPopupManager.startForegroundWatcher(
+          context,
+          isArabic: _isArabic,
+        );
+        await NotificationPopupManager.checkAndPresentLatestDuePopup(
+          context,
+          isArabic: _isArabic,
+        );
+      }
+    } catch (e) {
+      debugPrint('Error on app resumed schedule evaluation: $e');
+    }
   }
 
   Future<void> _checkAppLaunchNotification() async {
@@ -45,19 +116,15 @@ class _MainScreenState extends State<MainScreen> {
       final launchDetails = await NotificationService.getAppLaunchNotificationDetails();
       if (launchDetails != null && launchDetails.payload != null) {
         final payload = launchDetails.payload!;
-        if (payload.startsWith('motivation')) {
-          String quote = '';
-          if (payload.startsWith('motivation:')) {
-            quote = payload.substring('motivation:'.length);
-          }
-          await Future.delayed(const Duration(milliseconds: 700)); // wait for navigation ready
-          if (mounted) {
-            MotivationPopupManager.showMotivationPopup(
-              context,
-              isArabic: _isArabic,
-              overrideQuote: quote.isNotEmpty ? quote : null,
-            );
-          }
+        final appData = AppNotificationData.parsePayload(payload, isArabic: _isArabic);
+
+        await Future.delayed(const Duration(milliseconds: 700)); // wait for navigation ready
+        if (mounted) {
+          NotificationPopupManager.showNotificationPopup(
+            context,
+            data: appData,
+            isArabic: _isArabic,
+          );
         }
       }
     } catch (e) {
@@ -68,10 +135,11 @@ class _MainScreenState extends State<MainScreen> {
   Future<void> _checkForegroundMotivation() async {
     try {
       final settings = await ReminderSettings.load();
-      if (!settings.isRunning || !settings.motivationEnabled) return;
+      if (!settings.isRunning || !settings.motivationEnabled || !settings.hasSelectedWakeAndSleepTimes) return;
 
       final now = DateTime.now();
       final motivationTime = settings.getMotivationTime();
+      if (motivationTime == null) return;
       final motivationDateTime = DateTime(
         now.year,
         now.month,
@@ -97,8 +165,10 @@ class _MainScreenState extends State<MainScreen> {
     }
   }
 
-  final GlobalKey<NavigatorState> _shellNavigatorKey =
-      GlobalKey<NavigatorState>();
+  final List<GlobalKey<NavigatorState>> _tabNavigatorKeys = List.generate(
+    6,
+    (_) => GlobalKey<NavigatorState>(),
+  );
 
   void _toggleLanguage() {
     setState(() {
@@ -107,14 +177,21 @@ class _MainScreenState extends State<MainScreen> {
   }
 
   void _onBottomNavTapped(int index) {
-    // If inner navigator has pushed screens, pop back to root first
-    if (_shellNavigatorKey.currentState?.canPop() == true) {
-      _shellNavigatorKey.currentState?.popUntil((route) => route.isFirst);
+    if (_currentIndex == index) {
+      if (_tabNavigatorKeys[index].currentState?.canPop() == true) {
+        _tabNavigatorKeys[index].currentState?.popUntil((route) => route.isFirst);
+      }
+    } else {
+      setState(() {
+        _currentIndex = index;
+        _visitedTabs.add(index);
+      });
+      if (index == 0) {
+        if (_tabNavigatorKeys[0].currentState?.canPop() == true) {
+          _tabNavigatorKeys[0].currentState?.popUntil((route) => route.isFirst);
+        }
+      }
     }
-
-    setState(() {
-      _currentIndex = index;
-    });
   }
 
   Widget _buildTabRootScreen(int index) {
@@ -138,12 +215,17 @@ class _MainScreenState extends State<MainScreen> {
           },
         );
       case 3:
-        return ServicesScreen(
+        return AppWebViewScreen(
+          routeItem: AppRouteRegistry.faq,
           isArabic: _isArabic,
+          showBottomNav: false,
+          onReturnToHome: () {
+            _onBottomNavTapped(0);
+          },
         );
       case 4:
         return AppWebViewScreen(
-          routeItem: AppRouteRegistry.faq,
+          routeItem: AppRouteRegistry.maps,
           isArabic: _isArabic,
           showBottomNav: false,
           onReturnToHome: () {
@@ -177,9 +259,9 @@ class _MainScreenState extends State<MainScreen> {
         onPopInvokedWithResult: (didPop, result) async {
           if (didPop) return;
 
-          final navState = _shellNavigatorKey.currentState;
-          if (navState != null && navState.canPop()) {
-            navState.pop();
+          final currentNavState = _tabNavigatorKeys[_currentIndex].currentState;
+          if (currentNavState != null && currentNavState.canPop()) {
+            currentNavState.pop();
           } else if (_currentIndex != 0) {
             setState(() {
               _currentIndex = 0;
@@ -195,17 +277,22 @@ class _MainScreenState extends State<MainScreen> {
               Positioned.fill(
                 child: Padding(
                   padding: EdgeInsets.only(bottom: bottomInset),
-                  child: KeyedSubtree(
-                    key: ValueKey('tab_$_currentIndex'),
-                    child: Navigator(
-                      key: _shellNavigatorKey,
-                      onGenerateRoute: (settings) {
-                        return MaterialPageRoute(
-                          builder: (context) => _buildTabRootScreen(_currentIndex),
-                          settings: settings,
-                        );
-                      },
-                    ),
+                  child: IndexedStack(
+                    index: _currentIndex,
+                    children: List.generate(6, (index) {
+                      if (!_visitedTabs.contains(index)) {
+                        return const SizedBox.shrink();
+                      }
+                      return Navigator(
+                        key: _tabNavigatorKeys[index],
+                        onGenerateRoute: (settings) {
+                          return MaterialPageRoute(
+                            builder: (context) => _buildTabRootScreen(index),
+                            settings: settings,
+                          );
+                        },
+                      );
+                    }),
                   ),
                 ),
               ),

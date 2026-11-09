@@ -18,6 +18,7 @@
 # Keep timezone data & notifications plugin
 -keep class timezone.** { *; }
 -keep class flutter_local_notifications.** { *; }
+-keep class com.dexterous.flutterlocalnotifications.** { *; }
 
 # Ignore missing Play Core classes referenced by Flutter embedding
 -dontwarn com.google.android.play.core.**

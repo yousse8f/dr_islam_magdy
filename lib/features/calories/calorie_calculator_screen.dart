@@ -21,8 +21,8 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
   final _ageController = TextEditingController();
 
   String _gender = 'male';
-  String _activityLevel = 'moderate';
-  String _goal = 'maintain';
+  String? _activityLevel;
+  String? _goal;
   bool _isLoading = true;
   CalorieProfile? _existingProfile;
 
@@ -79,6 +79,7 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
 
   Future<void> _calculateAndSave() async {
     if (!_formKey.currentState!.validate()) return;
+    if (_activityLevel == null || _goal == null) return;
 
     final weight = double.parse(_normalizeDigits(_weightController.text));
     final height = double.parse(_normalizeDigits(_heightController.text));
@@ -89,8 +90,8 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
       height: height,
       age: age,
       gender: _gender,
-      activityLevel: _activityLevel,
-      goal: _goal,
+      activityLevel: _activityLevel!,
+      goal: _goal!,
     );
 
     final profile = CalorieProfile(
@@ -98,8 +99,8 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
       height: height,
       age: age,
       gender: _gender,
-      activityLevel: _activityLevel,
-      goal: _goal,
+      activityLevel: _activityLevel!,
+      goal: _goal!,
       dailyTargetCalories: target,
     );
 
@@ -404,7 +405,7 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                       const SizedBox(height: 16),
                       // Activity Level
                       Text(
-                        widget.isArabic ? 'مستوى النشاط' : 'Activity Level',
+                        widget.isArabic ? 'مستوى النشاط *' : 'Activity Level *',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -414,6 +415,15 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: _activityLevel,
+                        hint: Text(
+                          widget.isArabic
+                              ? 'اختر مستوى النشاط *'
+                              : 'Select Activity Level *',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.mutedText,
+                          ),
+                        ),
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -421,6 +431,14 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                           filled: true,
                           fillColor: AppColors.white,
                         ),
+                        validator: (val) {
+                          if (val == null || val.isEmpty) {
+                            return widget.isArabic
+                                ? 'يرجى اختيار مستوى النشاط'
+                                : 'Please select activity level';
+                          }
+                          return null;
+                        },
                         items: [
                           DropdownMenuItem(
                             value: 'sedentary',
@@ -456,12 +474,12 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                           ),
                         ],
                         onChanged: (val) =>
-                            setState(() => _activityLevel = val!),
+                            setState(() => _activityLevel = val),
                       ),
                       const SizedBox(height: 20),
                       // Goal
                       Text(
-                        widget.isArabic ? 'الهدف الصحي' : 'Health Goal',
+                        widget.isArabic ? 'الهدف الصحي *' : 'Health Goal *',
                         style: const TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
@@ -471,6 +489,15 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: _goal,
+                        hint: Text(
+                          widget.isArabic
+                              ? 'اختر الهدف الصحي *'
+                              : 'Select Health Goal *',
+                          style: const TextStyle(
+                            fontSize: 14,
+                            color: AppColors.mutedText,
+                          ),
+                        ),
                         decoration: InputDecoration(
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(12),
@@ -478,6 +505,14 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                           filled: true,
                           fillColor: AppColors.white,
                         ),
+                        validator: (val) {
+                          if (val == null || val.isEmpty) {
+                            return widget.isArabic
+                                ? 'يرجى اختيار الهدف الصحي'
+                                : 'Please select health goal';
+                          }
+                          return null;
+                        },
                         items: [
                           DropdownMenuItem(
                             value: 'maintain',
@@ -504,7 +539,7 @@ class _CalorieCalculatorScreenState extends State<CalorieCalculatorScreen> {
                             ),
                           ),
                         ],
-                        onChanged: (val) => setState(() => _goal = val!),
+                        onChanged: (val) => setState(() => _goal = val),
                       ),
                       const SizedBox(height: 32),
                       SizedBox(

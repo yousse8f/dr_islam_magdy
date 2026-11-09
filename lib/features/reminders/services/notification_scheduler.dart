@@ -4,6 +4,7 @@ import 'package:timezone/timezone.dart' as tz;
 
 import '../../../core/services/motivation_repository.dart';
 import '../models/reminder_settings.dart';
+import 'app_notification_data.dart';
 import 'notification_channels.dart';
 import 'notification_config.dart';
 
@@ -63,6 +64,11 @@ class NotificationScheduler {
           messageAr: isArabic ? 'التنبيه اتقفل' : 'Reminders Turned Off',
           messageEn: 'Reminders Turned Off',
         );
+      }
+
+      if (settings.scheduleActivatedAt == null) {
+        settings.scheduleActivatedAt = DateTime.now().millisecondsSinceEpoch;
+        await settings.save();
       }
 
       final now = tz.TZDateTime.now(tz.local);
@@ -127,6 +133,21 @@ class NotificationScheduler {
           iOS: iosDetails,
         );
 
+        final dateStr = '${scheduledDate.year}-${scheduledDate.month.toString().padLeft(2, '0')}-${scheduledDate.day.toString().padLeft(2, '0')}_${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+        final typePrefix = payload.split(':').first;
+        final occurrenceId = '${typePrefix}_$dateStr';
+
+        final appData = AppNotificationData(
+          occurrenceId: occurrenceId,
+          type: typePrefix.replaceAll(RegExp(r'_\d+$'), ''),
+          title: title,
+          body: body,
+          scheduledTime: DateTime(scheduledDate.year, scheduledDate.month, scheduledDate.day, hour, minute),
+          payloadRaw: payload,
+        );
+
+        final jsonPayload = appData.toPayloadString();
+
         try {
           await notifications.zonedSchedule(
             id,
@@ -138,7 +159,7 @@ class NotificationScheduler {
             uiLocalNotificationDateInterpretation:
                 UILocalNotificationDateInterpretation.absoluteTime,
             matchDateTimeComponents: DateTimeComponents.time,
-            payload: payload,
+            payload: jsonPayload,
           );
           scheduledCount++;
         } catch (e) {
@@ -153,7 +174,7 @@ class NotificationScheduler {
               uiLocalNotificationDateInterpretation:
                   UILocalNotificationDateInterpretation.absoluteTime,
               matchDateTimeComponents: DateTimeComponents.time,
-              payload: payload,
+              payload: jsonPayload,
             );
             scheduledCount++;
           } catch (e2) {
@@ -164,63 +185,71 @@ class NotificationScheduler {
       }
 
       // 1. Meals
-      if (settings.mealsEnabled) {
+      if (settings.mealsEnabled && settings.hasSelectedWakeAndSleepTimes) {
         final bTime = settings.getBreakfastTime();
-        await scheduleSingle(
-          id: 1000,
-          title: isArabic ? NotificationContentRegistry.breakfast.titleAr : NotificationContentRegistry.breakfast.titleEn,
-          body: isArabic ? NotificationContentRegistry.breakfast.bodyAr : NotificationContentRegistry.breakfast.bodyEn,
-          hour: bTime.hour,
-          minute: bTime.minute,
-          channelId: NotificationContentRegistry.breakfast.channelId,
-          soundName: NotificationContentRegistry.breakfast.soundName,
-          payload: 'breakfast',
-        );
+        if (bTime != null) {
+          await scheduleSingle(
+            id: 1000,
+            title: isArabic ? NotificationContentRegistry.breakfast.titleAr : NotificationContentRegistry.breakfast.titleEn,
+            body: isArabic ? NotificationContentRegistry.breakfast.bodyAr : NotificationContentRegistry.breakfast.bodyEn,
+            hour: bTime.hour,
+            minute: bTime.minute,
+            channelId: NotificationContentRegistry.breakfast.channelId,
+            soundName: NotificationContentRegistry.breakfast.soundName,
+            payload: 'breakfast',
+          );
+        }
 
         final lTime = settings.getLunchTime();
-        await scheduleSingle(
-          id: 1100,
-          title: isArabic ? NotificationContentRegistry.lunch.titleAr : NotificationContentRegistry.lunch.titleEn,
-          body: isArabic ? NotificationContentRegistry.lunch.bodyAr : NotificationContentRegistry.lunch.bodyEn,
-          hour: lTime.hour,
-          minute: lTime.minute,
-          channelId: NotificationContentRegistry.lunch.channelId,
-          soundName: NotificationContentRegistry.lunch.soundName,
-          payload: 'lunch',
-        );
+        if (lTime != null) {
+          await scheduleSingle(
+            id: 1100,
+            title: isArabic ? NotificationContentRegistry.lunch.titleAr : NotificationContentRegistry.lunch.titleEn,
+            body: isArabic ? NotificationContentRegistry.lunch.bodyAr : NotificationContentRegistry.lunch.bodyEn,
+            hour: lTime.hour,
+            minute: lTime.minute,
+            channelId: NotificationContentRegistry.lunch.channelId,
+            soundName: NotificationContentRegistry.lunch.soundName,
+            payload: 'lunch',
+          );
+        }
 
         final dTime = settings.getDinnerTime();
-        await scheduleSingle(
-          id: 1200,
-          title: isArabic ? NotificationContentRegistry.dinner.titleAr : NotificationContentRegistry.dinner.titleEn,
-          body: isArabic ? NotificationContentRegistry.dinner.bodyAr : NotificationContentRegistry.dinner.bodyEn,
-          hour: dTime.hour,
-          minute: dTime.minute,
-          channelId: NotificationContentRegistry.dinner.channelId,
-          soundName: NotificationContentRegistry.dinner.soundName,
-          payload: 'dinner',
-        );
+        if (dTime != null) {
+          await scheduleSingle(
+            id: 1200,
+            title: isArabic ? NotificationContentRegistry.dinner.titleAr : NotificationContentRegistry.dinner.titleEn,
+            body: isArabic ? NotificationContentRegistry.dinner.bodyAr : NotificationContentRegistry.dinner.bodyEn,
+            hour: dTime.hour,
+            minute: dTime.minute,
+            channelId: NotificationContentRegistry.dinner.channelId,
+            soundName: NotificationContentRegistry.dinner.soundName,
+            payload: 'dinner',
+          );
+        }
       }
 
       // 2. Motivation
-      if (settings.motivationEnabled) {
+      if (settings.motivationEnabled && settings.hasSelectedWakeAndSleepTimes) {
         final quoteText = await MotivationRepository.getRandomQuote();
         final mTime = settings.getMotivationTime();
-        await scheduleSingle(
-          id: 1300,
-          title: isArabic ? NotificationContentRegistry.motivation.titleAr : NotificationContentRegistry.motivation.titleEn,
-          body: quoteText,
-          hour: mTime.hour,
-          minute: mTime.minute,
-          channelId: NotificationContentRegistry.motivation.channelId,
-          soundName: NotificationContentRegistry.motivation.soundName,
-          payload: 'motivation:$quoteText',
-        );
+        if (mTime != null) {
+          await scheduleSingle(
+            id: 1300,
+            title: isArabic ? NotificationContentRegistry.motivation.titleAr : NotificationContentRegistry.motivation.titleEn,
+            body: quoteText,
+            hour: mTime.hour,
+            minute: mTime.minute,
+            channelId: NotificationContentRegistry.motivation.channelId,
+            soundName: NotificationContentRegistry.motivation.soundName,
+            payload: 'motivation:$quoteText',
+          );
+        }
       }
 
       // 3. Water (Sample main water reminders or interval)
       final waterInterval = settings.waterIntervalHours < 1 ? 1 : settings.waterIntervalHours;
-      if (settings.waterEnabled && waterInterval > 0) {
+      if (settings.waterEnabled && settings.hasSelectedWakeAndSleepTimes && waterInterval > 0) {
         final waterIntervalMins = waterInterval * 60;
         int currentWaterMins = settings.wakeTotalMins + waterIntervalMins;
         int waterIndex = 0;
@@ -245,44 +274,46 @@ class NotificationScheduler {
 
       // 4. Snack
       final snackInterval = settings.fruitVegIntervalHours < 1 ? 2 : settings.fruitVegIntervalHours;
-      if (settings.fruitVegEnabled && snackInterval > 0) {
+      if (settings.fruitVegEnabled && settings.hasSelectedWakeAndSleepTimes && snackInterval > 0) {
         final snackIntervalMins = snackInterval * 60;
         final minSnackMins = settings.wakeTotalMins + 90;
         final bTime = settings.getBreakfastTime();
-        int bMins = bTime.hour * 60 + bTime.minute;
+        if (bTime != null) {
+          int bMins = bTime.hour * 60 + bTime.minute;
 
-        int currentSnackMins = bMins + snackIntervalMins;
-        while (currentSnackMins < minSnackMins) {
-          currentSnackMins += snackIntervalMins;
-        }
+          int currentSnackMins = bMins + snackIntervalMins;
+          while (currentSnackMins < minSnackMins) {
+            currentSnackMins += snackIntervalMins;
+          }
 
-        int snackIndex = 0;
-        while (currentSnackMins < settings.snackCutoffMins && snackIndex < 6) {
-          final h = (currentSnackMins ~/ 60) % 24;
-          final m = currentSnackMins % 60;
-          await scheduleSingle(
-            id: 3000 + snackIndex,
-            title: isArabic ? NotificationContentRegistry.snack.titleAr : NotificationContentRegistry.snack.titleEn,
-            body: isArabic ? NotificationContentRegistry.snack.bodyAr : NotificationContentRegistry.snack.bodyEn,
-            hour: h,
-            minute: m,
-            channelId: NotificationContentRegistry.snack.channelId,
-            soundName: NotificationContentRegistry.snack.soundName,
-            payload: 'snack',
-          );
-          currentSnackMins += snackIntervalMins;
-          snackIndex++;
+          int snackIndex = 0;
+          while (currentSnackMins < settings.snackCutoffMins && snackIndex < 6) {
+            final h = (currentSnackMins ~/ 60) % 24;
+            final m = currentSnackMins % 60;
+            await scheduleSingle(
+              id: 3000 + snackIndex,
+              title: isArabic ? NotificationContentRegistry.snack.titleAr : NotificationContentRegistry.snack.titleEn,
+              body: isArabic ? NotificationContentRegistry.snack.bodyAr : NotificationContentRegistry.snack.bodyEn,
+              hour: h,
+              minute: m,
+              channelId: NotificationContentRegistry.snack.channelId,
+              soundName: NotificationContentRegistry.snack.soundName,
+              payload: 'snack',
+            );
+            currentSnackMins += snackIntervalMins;
+            snackIndex++;
+          }
         }
       }
 
       // 5. Workout
-      if (settings.workoutEnabled) {
+      if (settings.workoutEnabled && settings.workoutHour != null && settings.workoutMinute != null) {
         await scheduleSingle(
           id: 5000,
           title: isArabic ? NotificationContentRegistry.workout.titleAr : NotificationContentRegistry.workout.titleEn,
           body: isArabic ? NotificationContentRegistry.workout.bodyAr : NotificationContentRegistry.workout.bodyEn,
-          hour: settings.workoutHour,
-          minute: settings.workoutMinute,
+          hour: settings.workoutHour!,
+          minute: settings.workoutMinute!,
           channelId: NotificationContentRegistry.workout.channelId,
           soundName: NotificationContentRegistry.workout.soundName,
           payload: 'workout',
@@ -290,13 +321,13 @@ class NotificationScheduler {
       }
 
       // 6. Screen Off
-      if (settings.screenOffEnabled) {
+      if (settings.screenOffEnabled && settings.screenOffHour != null && settings.screenOffMinute != null) {
         await scheduleSingle(
           id: 4000,
           title: isArabic ? NotificationContentRegistry.screenOff.titleAr : NotificationContentRegistry.screenOff.titleEn,
           body: isArabic ? NotificationContentRegistry.screenOff.bodyAr : NotificationContentRegistry.screenOff.bodyEn,
-          hour: settings.screenOffHour,
-          minute: settings.screenOffMinute,
+          hour: settings.screenOffHour!,
+          minute: settings.screenOffMinute!,
           channelId: NotificationContentRegistry.screenOff.channelId,
           soundName: NotificationContentRegistry.screenOff.soundName,
           payload: 'screen_off',
@@ -304,13 +335,13 @@ class NotificationScheduler {
       }
 
       // 7. Vitamins
-      if (settings.vitaminsEnabled) {
+      if (settings.vitaminsEnabled && settings.vitaminsHour != null && settings.vitaminsMinute != null) {
         await scheduleSingle(
           id: 6000,
           title: isArabic ? NotificationContentRegistry.vitamins.titleAr : NotificationContentRegistry.vitamins.titleEn,
           body: isArabic ? NotificationContentRegistry.vitamins.bodyAr : NotificationContentRegistry.vitamins.bodyEn,
-          hour: settings.vitaminsHour,
-          minute: settings.vitaminsMinute,
+          hour: settings.vitaminsHour!,
+          minute: settings.vitaminsMinute!,
           channelId: NotificationContentRegistry.vitamins.channelId,
           soundName: NotificationContentRegistry.vitamins.soundName,
           payload: 'vitamins',
@@ -318,13 +349,13 @@ class NotificationScheduler {
       }
 
       // 8. Eye Rest
-      if (settings.eyeRestEnabled) {
+      if (settings.eyeRestEnabled && settings.eyeRestHour != null && settings.eyeRestMinute != null) {
         await scheduleSingle(
           id: 7000,
           title: isArabic ? NotificationContentRegistry.eyeRest.titleAr : NotificationContentRegistry.eyeRest.titleEn,
           body: isArabic ? NotificationContentRegistry.eyeRest.bodyAr : NotificationContentRegistry.eyeRest.bodyEn,
-          hour: settings.eyeRestHour,
-          minute: settings.eyeRestMinute,
+          hour: settings.eyeRestHour!,
+          minute: settings.eyeRestMinute!,
           channelId: NotificationContentRegistry.eyeRest.channelId,
           soundName: NotificationContentRegistry.eyeRest.soundName,
           payload: 'eye_rest',

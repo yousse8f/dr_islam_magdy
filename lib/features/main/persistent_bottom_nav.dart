@@ -55,14 +55,14 @@ class PersistentBottomNavBar extends StatelessWidget {
               _buildNavItem(
                 context,
                 3,
-                isArabic ? 'خدماتنا' : 'Services',
-                Icons.medical_services_rounded,
+                isArabic ? 'الأسئلة الشائعة' : 'FAQ',
+                Icons.help_outline_rounded,
               ),
               _buildNavItem(
                 context,
                 4,
-                isArabic ? 'الأسئلة الشائعة' : 'FAQ',
-                Icons.help_outline_rounded,
+                isArabic ? 'عناوين فروعنا' : 'Locations',
+                Icons.location_on_rounded,
               ),
               _buildNavItem(
                 context,

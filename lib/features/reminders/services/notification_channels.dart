@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import 'package:shared_preferences/shared_preferences.dart';
+
 class NotificationChannels {
   // Sound Resource Identifiers
   static const String mealSound = 'meal_sound';
@@ -45,7 +47,7 @@ class NotificationChannels {
     'dr_islam_fcm_channel_v1',
   ];
 
-  /// Deletes legacy Android channels and registers updated channels with exact sound mappings.
+  /// Performs one-time cleanup of legacy Android channels and registers current channels with exact sound mappings.
   static Future<void> registerAllChannels(
     FlutterLocalNotificationsPlugin notificationsPlugin,
   ) async {
@@ -57,11 +59,18 @@ class NotificationChannels {
     if (androidPlugin == null) return;
 
     try {
-      // 0. Clean up legacy channels to prevent Android sound binding lock
-      for (final legacyId in legacyChannelIds) {
-        try {
-          await androidPlugin.deleteNotificationChannel(legacyId);
-        } catch (_) {}
+      final prefs = await SharedPreferences.getInstance();
+      final hasCleanedLegacy = prefs.getBool('legacy_channels_cleaned_v1') ?? false;
+
+      if (!hasCleanedLegacy) {
+        // 0. Clean up legacy channels once during version migration
+        for (final legacyId in legacyChannelIds) {
+          try {
+            await androidPlugin.deleteNotificationChannel(legacyId);
+          } catch (_) {}
+        }
+        await prefs.setBool('legacy_channels_cleaned_v1', true);
+        debugPrint('[NotificationChannels] Legacy notification channels cleaned up once.');
       }
 
       // 1. Meals Channel (Breakfast, Lunch, Dinner -> meal_sound)
