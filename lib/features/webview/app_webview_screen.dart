@@ -62,7 +62,13 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
             }
           },
           onPageFinished: (String url) {
-            // Set responsive viewport & center page content cleanly across the full screen width without horizontal overflow
+            final isFaqPage = widget.routeItem.id == 'faq';
+            final initialScale = isFaqPage ? '0.65' : '1.0';
+            final extraFaqCss = isFaqPage
+                ? 'body, html { zoom: 65%!important; -webkit-text-size-adjust: 65%!important; font-size: 75%!important; overflow: hidden!important; height: 100%!important; } .container, .faq-container, .content, main { max-width: 100%!important; width: 100%!important; padding-left: 4px!important; padding-right: 4px!important; }'
+                : '';
+
+            // Set responsive viewport & scale FAQ page content cleanly to fit all content on screen
             _controller.runJavaScript('''
               (function() {
                 var meta = document.querySelector('meta[name="viewport"]');
@@ -73,10 +79,10 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
                     document.head.appendChild(meta);
                   }
                 }
-                meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
+                meta.content = 'width=device-width, initial-scale=$initialScale, maximum-scale=3.0, user-scalable=yes';
                 
                 var style = document.createElement('style');
-                style.innerHTML = '*{max-width:100%!important;box-sizing:border-box!important;} body, html {overflow-x:hidden!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;} img, video, canvas, svg {height:auto!important;max-width:100%!important;} table {max-width:100%!important;overflow-x:auto!important;display:block!important;}';
+                style.innerHTML = '*{max-width:100%!important;box-sizing:border-box!important;} body, html {overflow-x:hidden!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;} img, video, canvas, svg {height:auto!important;max-width:100%!important;} table {max-width:100%!important;overflow-x:auto!important;display:block!important;} $extraFaqCss';
                 if (document.head) {
                   document.head.appendChild(style);
                 }
