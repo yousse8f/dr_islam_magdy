@@ -70,12 +70,13 @@ void main() {
 
       final shownSet = <String>{snackOccurrenceId};
 
-      // User reopens app: evaluateAndGetLatestDueNotification
+      // User reopens app at 11:05 AM: evaluateAndGetLatestDueNotification
       final latestDueOnReopen = await LatestNotificationService.evaluateAndGetLatestDueNotification(
         settings: settings,
         isArabic: true,
         allowPastInspected: false,
         shownOccurrenceIds: shownSet,
+        evalTime: DateTime(today.year, today.month, today.day, 11, 5),
       );
 
       // Water (10:00) scheduled time is 10:00 AM, which is <= lastAutoEvaluatedTime (11:00 AM).

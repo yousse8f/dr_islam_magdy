@@ -355,19 +355,20 @@ class LatestNotificationService {
     return dueCandidates;
   }
 
-  /// Evaluates active schedule against current time `now` and returns the single latest due notification.
+  /// Evaluates active schedule against current time `now` (or provided `evalTime`) and returns the single latest due notification.
   /// If `allowPastInspected` is true (for Home Bell manual inspection), ignores last handled timestamp and returns latest due notification.
   static Future<AppNotificationData?> evaluateAndGetLatestDueNotification({
     required ReminderSettings settings,
     required bool isArabic,
     bool allowPastInspected = false,
     Set<String>? shownOccurrenceIds,
+    DateTime? evalTime,
   }) async {
     if (!settings.isRunning) {
       return null;
     }
 
-    final now = DateTime.now();
+    final now = evalTime ?? DateTime.now();
     final todayStart = DateTime(now.year, now.month, now.day, 0, 0, 0);
 
     final dueCandidates = await getDueNotificationsForWindow(
@@ -400,9 +401,9 @@ class LatestNotificationService {
       }
     }
 
-    selected ??= dueCandidates.first;
-
-    await saveLatestNotification(selected);
+    if (selected != null) {
+      await saveLatestNotification(selected);
+    }
     return selected;
   }
 }
