@@ -63,9 +63,9 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
           },
           onPageFinished: (String url) {
             final isFaqPage = widget.routeItem.id == 'faq';
-            final initialScale = isFaqPage ? '0.65' : '1.0';
+            final initialScale = isFaqPage ? '0.5' : '1.0';
             final extraFaqCss = isFaqPage
-                ? 'body, html { zoom: 65%!important; -webkit-text-size-adjust: 65%!important; font-size: 75%!important; overflow: hidden!important; height: 100%!important; } .container, .faq-container, .content, main { max-width: 100%!important; width: 100%!important; padding-left: 4px!important; padding-right: 4px!important; }'
+                ? 'body, html { zoom: 50%!important; -webkit-text-size-adjust: 50%!important; font-size: 60%!important; overflow: hidden!important; height: 100vh!important; position: fixed!important; width: 100%!important; } .container, .faq-container, .content, main { max-width: 100%!important; width: 100%!important; padding: 2px!important; }'
                 : '';
 
             // Set responsive viewport & scale FAQ page content cleanly to fit all content on screen
@@ -85,6 +85,15 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
                 style.innerHTML = '*{max-width:100%!important;box-sizing:border-box!important;} body, html {overflow-x:hidden!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;} img, video, canvas, svg {height:auto!important;max-width:100%!important;} table {max-width:100%!important;overflow-x:auto!important;display:block!important;} $extraFaqCss';
                 if (document.head) {
                   document.head.appendChild(style);
+                }
+
+                if (${isFaqPage ? 'true' : 'false'}) {
+                  document.addEventListener('touchmove', function(e) {
+                    e.preventDefault();
+                  }, { passive: false });
+                  document.addEventListener('wheel', function(e) {
+                    e.preventDefault();
+                  }, { passive: false });
                 }
               })();
             ''');
