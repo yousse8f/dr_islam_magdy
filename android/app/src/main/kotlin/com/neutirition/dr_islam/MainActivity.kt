@@ -1,4 +1,4 @@
-package com.example.dr_islam_magdy
+package com.neutirition.dr_islam
 
 import io.flutter.embedding.android.FlutterActivity
 

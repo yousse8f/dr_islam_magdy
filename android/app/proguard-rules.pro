@@ -6,7 +6,7 @@
 -keep class io.flutter.embedding.** { *; }
 
 # App models & serialization
--keep class com.example.dr_islam_magdy.** { *; }
+-keep class com.drislammagdy.clinic.** { *; }
 
 # Flutter Plugins
 -keep class io.flutter.plugins.sharedpreferences.** { *; }

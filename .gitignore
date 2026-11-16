@@ -39,6 +39,19 @@ app.*.symbols
 # Obfuscation related
 app.*.map.json
 
+# Keystore and signing keys
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.p8
+*.cer
+*.mobileprovision
+GoogleService-Info.plist
+ios/Runner/GoogleService-Info.plist
+key.properties
+android/key.properties
+
 # Android Studio will place build artifacts here
 /android/app/debug
 /android/app/profile

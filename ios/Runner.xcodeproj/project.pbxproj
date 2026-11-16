@@ -24,6 +24,7 @@
 		B1B2C3022EC3CC0100C636F2 /* motivation_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3022EC3CC0100C636F1 /* motivation_sound.wav */; };
 		B1B2C3032EC3CC0100C636F2 /* snack_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3032EC3CC0100C636F1 /* snack_sound.wav */; };
 		B1B2C3042EC3CC0100C636F2 /* water_sound.wav in Resources */ = {isa = PBXBuildFile; fileRef = B1B2C3042EC3CC0100C636F1 /* water_sound.wav */; };
+		C1B2C3012EC3CC0100C636F2 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = C1B2C3012EC3CC0100C636F1 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +76,7 @@
 		B1B2C3022EC3CC0100C636F1 /* motivation_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = motivation_sound.wav; sourceTree = "<group>"; };
 		B1B2C3032EC3CC0100C636F1 /* snack_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = snack_sound.wav; sourceTree = "<group>"; };
 		B1B2C3042EC3CC0100C636F1 /* water_sound.wav */ = {isa = PBXFileReference; lastKnownFileType = audio.wav; path = water_sound.wav; sourceTree = "<group>"; };
+		C1B2C3012EC3CC0100C636F1 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -148,6 +150,7 @@
 				B1B2C3022EC3CC0100C636F1 /* motivation_sound.wav */,
 				B1B2C3032EC3CC0100C636F1 /* snack_sound.wav */,
 				B1B2C3042EC3CC0100C636F1 /* water_sound.wav */,
+				C1B2C3012EC3CC0100C636F1 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Runner;
 			sourceTree = "<group>";
@@ -261,6 +264,7 @@
 				B1B2C3022EC3CC0100C636F2 /* motivation_sound.wav in Resources */,
 				B1B2C3032EC3CC0100C636F2 /* snack_sound.wav in Resources */,
 				B1B2C3042EC3CC0100C636F2 /* water_sound.wav in Resources */,
+				C1B2C3012EC3CC0100C636F2 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -415,7 +419,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.drIslamMagdy;
+				DEVELOPMENT_TEAM = 4TD34U23GU;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutirition.drEslam;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
@@ -431,7 +436,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.drIslamMagdy.RunnerTests;
+				DEVELOPMENT_TEAM = 4TD34U23GU;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutirition.drEslam.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -448,7 +454,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.drIslamMagdy.RunnerTests;
+				DEVELOPMENT_TEAM = 4TD34U23GU;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutirition.drEslam.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
@@ -463,7 +470,8 @@
 				CURRENT_PROJECT_VERSION = 1;
 				GENERATE_INFOPLIST_FILE = YES;
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.drIslamMagdy.RunnerTests;
+				DEVELOPMENT_TEAM = 4TD34U23GU;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutirition.drEslam.RunnerTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_VERSION = 5.0;
 				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Runner.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Runner";
@@ -596,7 +604,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.drIslamMagdy;
+				DEVELOPMENT_TEAM = 4TD34U23GU;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutirition.drEslam;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
@@ -618,7 +627,8 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				PRODUCT_BUNDLE_IDENTIFIER = com.example.drIslamMagdy;
+				DEVELOPMENT_TEAM = 4TD34U23GU;
+				PRODUCT_BUNDLE_IDENTIFIER = com.neutirition.drEslam;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_OBJC_BRIDGING_HEADER = "Runner/Runner-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
