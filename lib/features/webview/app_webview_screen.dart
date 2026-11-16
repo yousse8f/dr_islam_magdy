@@ -63,9 +63,9 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
           },
           onPageFinished: (String url) {
             final isFaqPage = widget.routeItem.id == 'faq';
-            final initialScale = isFaqPage ? '0.5' : '1.0';
+            final initialScale = isFaqPage ? '0.42' : '1.0';
             final extraFaqCss = isFaqPage
-                ? 'body, html { zoom: 50%!important; -webkit-text-size-adjust: 50%!important; font-size: 60%!important; overflow: hidden!important; height: 100vh!important; position: fixed!important; width: 100%!important; } .container, .faq-container, .content, main { max-width: 100%!important; width: 100%!important; padding: 2px!important; }'
+                ? 'body, html { zoom: 42%!important; -webkit-text-size-adjust: 42%!important; font-size: 50%!important; overflow: hidden!important; height: 100vh!important; position: fixed!important; width: 100%!important; margin: 0!important; padding: 0!important; } .container, .faq-container, .content, main { max-width: 100%!important; width: 100%!important; padding: 0!important; margin: 0 auto!important; }'
                 : '';
 
             // Set responsive viewport & scale FAQ page content cleanly to fit all content on screen
