@@ -464,7 +464,7 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                             color: Colors.blue.shade700,
                           ),
                           _buildSmallMetricCard(
-                            value: '${_profile!.bmi.toStringAsFixed(1)}',
+                            value: _profile!.bmi.toStringAsFixed(1),
                             label: 'BMI',
                             sublabel: _getBmiStatus(_profile!.bmi, widget.isArabic),
                             icon: Icons.monitor_weight_rounded,
