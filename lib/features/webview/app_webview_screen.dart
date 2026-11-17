@@ -64,10 +64,10 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
           onPageFinished: (String url) {
             final isFaqPage = widget.routeItem.id == 'faq';
             final extraFaqCss = isFaqPage
-                ? 'body, html { zoom: 82% !important; overflow: hidden !important; height: 100% !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }'
+                ? 'body, html { height: 100% !important; min-height: 100% !important; overflow-y: auto !important; width: 100% !important; margin: 0 !important; padding: 0 !important; padding-bottom: 80px !important; display: flex !important; flex-direction: column !important; justify-content: space-between !important; }'
                 : '';
 
-            // Set responsive viewport & disable scrolling for FAQ page if requested
+            // Set responsive viewport & enable scrolling for FAQ page
             _controller.runJavaScript('''
               (function() {
                 var meta = document.querySelector('meta[name="viewport"]');
@@ -84,15 +84,6 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
                 style.innerHTML = '*{max-width:100%!important;box-sizing:border-box!important;} body, html {overflow-x:hidden!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;} img, video, canvas, svg {height:auto!important;max-width:100%!important;} table {max-width:100%!important;overflow-x:auto!important;display:block!important;} $extraFaqCss';
                 if (document.head) {
                   document.head.appendChild(style);
-                }
-
-                if (${isFaqPage ? 'true' : 'false'}) {
-                  document.addEventListener('touchmove', function(e) {
-                    e.preventDefault();
-                  }, { passive: false });
-                  document.addEventListener('wheel', function(e) {
-                    e.preventDefault();
-                  }, { passive: false });
                 }
               })();
             ''');

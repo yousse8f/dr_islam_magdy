@@ -447,7 +447,7 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                         physics: const NeverScrollableScrollPhysics(),
                         crossAxisSpacing: 8,
                         mainAxisSpacing: 8,
-                        childAspectRatio: 2.3,
+                        childAspectRatio: 2.15,
                         children: [
                           _buildSmallMetricCard(
                             value: 'kcal ${_profile!.bmr.round()}',
@@ -721,8 +721,8 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                 Text(
                   label,
                   style: const TextStyle(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
                     color: AppColors.mutedText,
                   ),
                   maxLines: 1,
@@ -732,7 +732,7 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                 Text(
                   value,
                   style: TextStyle(
-                    fontSize: 12.5,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
                     color: color,
                   ),
@@ -742,7 +742,8 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                 Text(
                   sublabel,
                   style: const TextStyle(
-                    fontSize: 8.5,
+                    fontSize: 9.5,
+                    fontWeight: FontWeight.normal,
                     color: AppColors.textDark,
                   ),
                   maxLines: 1,

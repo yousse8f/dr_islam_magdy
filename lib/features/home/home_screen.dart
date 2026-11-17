@@ -220,7 +220,7 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
       body: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(14, 8, 14, 75),
+        padding: const EdgeInsets.fromLTRB(14, 8, 14, 40),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -559,8 +559,8 @@ class HomeScreen extends StatelessWidget {
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
       child: Container(
-        height: 88,
-        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 3),
+        height: 94,
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
         decoration: BoxDecoration(
           color: AppColors.white,
           borderRadius: BorderRadius.circular(16),
@@ -590,11 +590,12 @@ class HomeScreen extends StatelessWidget {
                 ),
               ),
             Column(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
+                const SizedBox(height: 3),
                 Container(
-                  width: 38,
-                  height: 38,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     gradient: LinearGradient(
                       colors: gradientColors,
@@ -610,8 +611,9 @@ class HomeScreen extends StatelessWidget {
                       ),
                     ],
                   ),
-                  child: Icon(icon, color: iconColor, size: 21),
+                  child: Icon(icon, color: iconColor, size: 24),
                 ),
+                const SizedBox(height: 4),
                 Text(
                   title,
                   textAlign: TextAlign.center,

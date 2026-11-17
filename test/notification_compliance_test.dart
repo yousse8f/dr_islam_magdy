@@ -152,7 +152,8 @@ void main() {
     });
 
     test('Point 5: Midnight boundary transition (23:55 PM to 00:05 AM next day)', () async {
-      final now = DateTime.now();
+      final today = DateTime(DateTime.now().year, DateTime.now().month, DateTime.now().day);
+      final now = DateTime(today.year, today.month, today.day, 0, 5); // 00:05 AM today
       final settings = ReminderSettings(
         isRunning: true,
         wakeHour: 8,
@@ -160,7 +161,7 @@ void main() {
         sleepHour: 0,
         sleepMinute: 55,
         mealsEnabled: true,
-        scheduleActivatedAt: now.subtract(const Duration(hours: 5)).millisecondsSinceEpoch,
+        scheduleActivatedAt: now.subtract(const Duration(hours: 6)).millisecondsSinceEpoch,
       );
 
       final candidates = await LatestNotificationService.getDueNotificationsForWindow(
