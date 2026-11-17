@@ -33,6 +33,16 @@ class CalorieStorage {
     await prefs.setString(_dayKey(dateStr), encoded);
   }
 
+  static Future<int> getWaterForDate(String dateStr) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt('water_${dateStr}_v1') ?? 0;
+  }
+
+  static Future<void> saveWaterForDate(String dateStr, int ml) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('water_${dateStr}_v1', ml);
+  }
+
   static Future<List<String>> getLoggedDates() async {
     final prefs = await SharedPreferences.getInstance();
     final keys = prefs.getKeys();

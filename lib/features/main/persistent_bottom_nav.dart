@@ -30,7 +30,7 @@ class PersistentBottomNavBar extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(24),
         child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 2),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
@@ -43,31 +43,31 @@ class PersistentBottomNavBar extends StatelessWidget {
               _buildNavItem(
                 context,
                 1,
-                isArabic ? 'اعرفنا أكتر' : 'About',
+                isArabic ? 'اعرفنا' : 'About',
                 Icons.info_outline_rounded,
               ),
               _buildNavItem(
                 context,
                 2,
-                isArabic ? 'احجز خدماتك' : 'Book',
+                isArabic ? 'خدماتك' : 'Services',
                 Icons.calendar_month_rounded,
               ),
               _buildNavItem(
                 context,
                 3,
-                isArabic ? 'الأسئلة الشائعة' : 'FAQ',
+                isArabic ? 'الأسئلة' : 'FAQ',
                 Icons.help_outline_rounded,
               ),
               _buildNavItem(
                 context,
                 4,
-                isArabic ? 'عناوين فروعنا' : 'Locations',
+                isArabic ? 'الفروع' : 'Branches',
                 Icons.location_on_rounded,
               ),
               _buildNavItem(
                 context,
                 5,
-                isArabic ? 'تواصل معنا' : 'Contact',
+                isArabic ? 'تواصل' : 'Contact',
                 Icons.phone_rounded,
               ),
             ],
@@ -88,60 +88,63 @@ class PersistentBottomNavBar extends StatelessWidget {
       child: InkWell(
         onTap: () => onTap(index),
         borderRadius: BorderRadius.circular(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 250),
-              curve: Curves.easeInOut,
-              width: 40,
-              height: 40,
-              transform: Matrix4.translationValues(0, isActive ? -8 : 0, 0),
-              decoration: BoxDecoration(
-                gradient: isActive
-                    ? const LinearGradient(
-                        colors: [Color(0xFF124634), Color(0xFF207B5D)],
-                        begin: Alignment.topRight,
-                        end: Alignment.bottomLeft,
-                      )
-                    : null,
-                color: isActive ? null : Colors.transparent,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: isActive
-                    ? const [
-                        BoxShadow(
-                          color: Color(0x59124634), // rgba(18,70,52,0.35)
-                          blurRadius: 12,
-                          offset: Offset(0, 6),
-                        ),
-                      ]
-                    : [],
-              ),
-              child: Icon(
-                icon,
-                size: 20,
-                color: isActive ? Colors.white : Colors.grey.shade400,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Transform.translate(
-              offset: Offset(0, isActive ? -4 : 0),
-              child: Text(
-                label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 8.5,
-                  height: 1.1,
-                  fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
-                  color: isActive
-                      ? const Color(0xFF124634)
-                      : Colors.grey.shade400,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 1),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AnimatedContainer(
+                duration: const Duration(milliseconds: 250),
+                curve: Curves.easeInOut,
+                width: 38,
+                height: 38,
+                transform: Matrix4.translationValues(0, isActive ? -6 : 0, 0),
+                decoration: BoxDecoration(
+                  gradient: isActive
+                      ? const LinearGradient(
+                          colors: [Color(0xFF124634), Color(0xFF207B5D)],
+                          begin: Alignment.topRight,
+                          end: Alignment.bottomLeft,
+                        )
+                      : null,
+                  color: isActive ? null : Colors.transparent,
+                  borderRadius: BorderRadius.circular(14),
+                  boxShadow: isActive
+                      ? const [
+                          BoxShadow(
+                            color: Color(0x59124634), // rgba(18,70,52,0.35)
+                            blurRadius: 10,
+                            offset: Offset(0, 5),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Icon(
+                  icon,
+                  size: 19,
+                  color: isActive ? Colors.white : Colors.grey.shade400,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 2),
+              Transform.translate(
+                offset: Offset(0, isActive ? -3 : 0),
+                child: Text(
+                  label,
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 8.5,
+                    height: 1.1,
+                    fontWeight: isActive ? FontWeight.w900 : FontWeight.w600,
+                    color: isActive
+                        ? const Color(0xFF124634)
+                        : Colors.grey.shade400,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

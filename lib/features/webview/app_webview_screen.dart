@@ -63,12 +63,11 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
           },
           onPageFinished: (String url) {
             final isFaqPage = widget.routeItem.id == 'faq';
-            final initialScale = isFaqPage ? '0.42' : '1.0';
             final extraFaqCss = isFaqPage
-                ? 'body, html { zoom: 42%!important; -webkit-text-size-adjust: 42%!important; font-size: 50%!important; overflow: hidden!important; height: 100vh!important; position: fixed!important; width: 100%!important; margin: 0!important; padding: 0!important; } .container, .faq-container, .content, main { max-width: 100%!important; width: 100%!important; padding: 0!important; margin: 0 auto!important; }'
+                ? 'body, html { zoom: 82% !important; overflow: hidden !important; height: 100% !important; width: 100% !important; margin: 0 !important; padding: 0 !important; }'
                 : '';
 
-            // Set responsive viewport & scale FAQ page content cleanly to fit all content on screen
+            // Set responsive viewport & disable scrolling for FAQ page if requested
             _controller.runJavaScript('''
               (function() {
                 var meta = document.querySelector('meta[name="viewport"]');
@@ -79,7 +78,7 @@ class _AppWebViewScreenState extends State<AppWebViewScreen> {
                     document.head.appendChild(meta);
                   }
                 }
-                meta.content = 'width=device-width, initial-scale=$initialScale, maximum-scale=3.0, user-scalable=yes';
+                meta.content = 'width=device-width, initial-scale=1.0, maximum-scale=3.0, user-scalable=yes';
                 
                 var style = document.createElement('style');
                 style.innerHTML = '*{max-width:100%!important;box-sizing:border-box!important;} body, html {overflow-x:hidden!important;width:100%!important;max-width:100%!important;margin:0!important;padding:0!important;} img, video, canvas, svg {height:auto!important;max-width:100%!important;} table {max-width:100%!important;overflow-x:auto!important;display:block!important;} $extraFaqCss';

@@ -299,7 +299,7 @@ class HomeScreen extends StatelessWidget {
                                 const SizedBox(width: 4),
                                 Flexible(
                                   child: Text(
-                                    isArabic ? 'احجز ميعادك' : 'Book',
+                                    AppRouteRegistry.book.getTitle(isArabic),
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
@@ -351,11 +351,11 @@ class HomeScreen extends StatelessWidget {
                                 const SizedBox(width: 5),
                                 Flexible(
                                   child: Text(
-                                    isArabic ? 'شات المتابعة' : 'Follow-up',
+                                    isArabic ? 'شات المتابعة الأونلاين' : 'Online Follow-up',
                                     overflow: TextOverflow.ellipsis,
                                     style: const TextStyle(
                                       fontWeight: FontWeight.bold,
-                                      fontSize: 13.5,
+                                      fontSize: 12.5,
                                     ),
                                   ),
                                 ),

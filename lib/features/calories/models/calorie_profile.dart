@@ -41,6 +41,46 @@ class CalorieProfile {
     dailyTargetCalories: (json['dailyTargetCalories'] as num).toInt(),
   );
 
+  double get bmr {
+    if (gender == 'male') {
+      return (10 * weight) + (6.25 * height) - (5 * age) + 5;
+    } else {
+      return (10 * weight) + (6.25 * height) - (5 * age) - 161;
+    }
+  }
+
+  double get tdee {
+    double multiplier = 1.2;
+    switch (activityLevel) {
+      case 'sedentary':
+        multiplier = 1.2;
+        break;
+      case 'light':
+        multiplier = 1.375;
+        break;
+      case 'moderate':
+        multiplier = 1.55;
+        break;
+      case 'active':
+        multiplier = 1.725;
+        break;
+    }
+    return bmr * multiplier;
+  }
+
+  double get bmi {
+    final heightM = height / 100.0;
+    return heightM > 0 ? weight / (heightM * heightM) : 0.0;
+  }
+
+  int get proteinTarget => (weight * 1.8).round();
+  int get fatsTarget => ((dailyTargetCalories * 0.25) / 9).round();
+  int get carbsTarget {
+    final calculated = ((dailyTargetCalories - (proteinTarget * 4) - (fatsTarget * 9)) / 4).round();
+    return calculated < 50 ? 50 : calculated;
+  }
+  int get waterTargetMl => (weight * 35).round();
+
   static int calculateTarget({
     required double weight,
     required double height,

@@ -20,7 +20,7 @@ class AppRouteRegistry {
   static const AppRouteItem book = AppRouteItem(
     id: 'book',
     url: 'https://wedietly.com/app/book',
-    titleAr: 'حجز الخدمات',
+    titleAr: 'الحجز والخدمات',
     titleEn: 'Book Services',
   );
 

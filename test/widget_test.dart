@@ -80,6 +80,6 @@ void main() {
     expect(url, 'https://wedietly.com/app/book');
 
     final titleAr = AppConfigService.getTitleAr(AppRouteRegistry.book);
-    expect(titleAr, 'حجز الخدمات');
+    expect(titleAr, 'الحجز والخدمات');
   });
 }

@@ -120,8 +120,11 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
     final amount = double.tryParse(_amountController.text.trim()) ?? 100.0;
     if (amount <= 0) return;
 
-    final calculatedCalories =
-        (_selectedPreset!.caloriesPer100g * (amount / 100.0)).round();
+    final factor = amount / 100.0;
+    final calculatedCalories = (_selectedPreset!.caloriesPer100g * factor).round();
+    final calculatedProtein = _selectedPreset!.proteinPer100g * factor;
+    final calculatedCarbs = _selectedPreset!.carbsPer100g * factor;
+    final calculatedFats = _selectedPreset!.fatsPer100g * factor;
 
     final item = LoggedFood(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -129,8 +132,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       amount: amount,
       unit: widget.isArabic ? 'جرام' : 'g',
       calories: calculatedCalories,
+      protein: calculatedProtein,
+      carbs: calculatedCarbs,
+      fats: calculatedFats,
       mealType: widget.mealType,
       isCustom: false,
+      hasCompleteMacros: true,
     );
 
     Navigator.pop(context, item);
@@ -143,8 +150,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       amount: 1,
       unit: widget.isArabic ? 'وجبة كاملة' : 'full meal',
       calories: meal.totalCalories,
+      protein: 15.0,
+      carbs: 30.0,
+      fats: 10.0,
       mealType: widget.mealType,
       isCustom: false,
+      hasCompleteMacros: false,
     );
 
     Navigator.pop(context, item);
@@ -173,8 +184,12 @@ class _AddFoodScreenState extends State<AddFoodScreen> {
       amount: 1,
       unit: widget.isArabic ? 'وجبة / يدوي' : 'custom',
       calories: calories,
+      protein: 0.0,
+      carbs: 0.0,
+      fats: 0.0,
       mealType: widget.mealType,
       isCustom: true,
+      hasCompleteMacros: false,
     );
 
     Navigator.pop(context, item);
