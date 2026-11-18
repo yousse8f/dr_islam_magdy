@@ -1,0 +1,63 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function for secure admin check supporting custom claim or trusted UID
+    function isAdmin() {
+      return request.auth != null && (
+        (request.auth.token.keys().hasAll(['admin']) && request.auth.token.admin == true) ||
+        request.auth.uid == "REPLACE_WITH_ADMIN_UID"
+      );
+    }
+
+    // Helper function to validate a service entry map structure
+    function isValidServiceEntry(entry) {
+      return entry is map &&
+             entry.keys().hasAll(['url']) &&
+             entry.url is string &&
+             entry.url.matches('^https://.*') &&
+             (!entry.keys().hasAll(['title_ar']) || entry.title_ar is string);
+    }
+
+    // App Configuration Services document (app_config/services)
+    match /app_config/services {
+      // Public read access for mobile app users
+      allow read: if true;
+
+      // Prevent full document deletion even by admin
+      allow delete: if false;
+
+      // Admin write rules:
+      // 1. Must be admin
+      // 2. services_links must be a map with approved service keys only
+      // 3. Each service entry must have a valid https:// url and optional string title_ar
+      allow create, update: if isAdmin() &&
+        request.resource.data.services_links is map &&
+        request.resource.data.services_links.keys().hasOnly([
+          'book', 'knowYourTurn', 'followupChat', 'chatbot',
+          'maps', 'packages', 'calorieNeeds', 'offers', 'articles', 'faq'
+        ]) &&
+        (!request.resource.data.services_links.keys().hasAll(['book']) || isValidServiceEntry(request.resource.data.services_links.book)) &&
+        (!request.resource.data.services_links.keys().hasAll(['knowYourTurn']) || isValidServiceEntry(request.resource.data.services_links.knowYourTurn)) &&
+        (!request.resource.data.services_links.keys().hasAll(['followupChat']) || isValidServiceEntry(request.resource.data.services_links.followupChat)) &&
+        (!request.resource.data.services_links.keys().hasAll(['chatbot']) || isValidServiceEntry(request.resource.data.services_links.chatbot)) &&
+        (!request.resource.data.services_links.keys().hasAll(['maps']) || isValidServiceEntry(request.resource.data.services_links.maps)) &&
+        (!request.resource.data.services_links.keys().hasAll(['packages']) || isValidServiceEntry(request.resource.data.services_links.packages)) &&
+        (!request.resource.data.services_links.keys().hasAll(['calorieNeeds']) || isValidServiceEntry(request.resource.data.services_links.calorieNeeds)) &&
+        (!request.resource.data.services_links.keys().hasAll(['offers']) || isValidServiceEntry(request.resource.data.services_links.offers)) &&
+        (!request.resource.data.services_links.keys().hasAll(['articles']) || isValidServiceEntry(request.resource.data.services_links.articles)) &&
+        (!request.resource.data.services_links.keys().hasAll(['faq']) || isValidServiceEntry(request.resource.data.services_links.faq));
+    }
+
+    // Other documents in app_config collection (e.g. motivation)
+    match /app_config/{docId} {
+      allow read: if true;
+      allow write: if docId != 'services' && isAdmin();
+    }
+
+    // Default deny for all other collections in the project
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

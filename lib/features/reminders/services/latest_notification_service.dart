@@ -239,6 +239,20 @@ class LatestNotificationService {
             currentMins += waterIntervalMins;
             wIdx++;
           }
+
+          // Morning Wake Water: 15 minutes after wake-up time
+          if (settings.hasWakeTime) {
+            final wwMins = settings.wakeTotalMins + 15;
+            final wwSched = baseMidnight.add(Duration(minutes: wwMins));
+            addCandidateIfValid(
+              type: 'water',
+              titleAr: NotificationContentRegistry.wakeWater.titleAr,
+              titleEn: NotificationContentRegistry.wakeWater.titleEn,
+              bodyAr: NotificationContentRegistry.wakeWater.bodyAr,
+              bodyEn: NotificationContentRegistry.wakeWater.bodyEn,
+              scheduledDateTime: wwSched,
+            );
+          }
         }
 
         // 6. Snack: interval from breakfast+interval to snack Cutoff

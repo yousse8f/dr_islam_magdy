@@ -5,6 +5,8 @@ import 'package:dr_islam_magdy/features/reminders/models/reminder_settings.dart'
 import 'package:dr_islam_magdy/features/reminders/services/app_notification_data.dart';
 import 'package:dr_islam_magdy/features/reminders/services/latest_notification_service.dart';
 import 'package:dr_islam_magdy/features/reminders/services/notification_history_service.dart';
+import 'package:dr_islam_magdy/features/reminders/services/notification_channels.dart';
+import 'package:dr_islam_magdy/features/reminders/services/notification_config.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -145,6 +147,39 @@ void main() {
       unread = await NotificationHistoryService.getUnreadHistory();
       expect(unread.length, equals(1));
       expect(unread[0].type, equals('snack'));
+    });
+
+    test('Morning Wake Water reminder: timing, midnight crossover, content, and ID verification', () {
+      // 1. Wake time 07:00 -> Wake water 07:15
+      final settings1 = ReminderSettings(wakeHour: 7, wakeMinute: 0);
+      final ww1 = settings1.getWakeWaterTime();
+      expect(ww1?.hour, equals(7));
+      expect(ww1?.minute, equals(15));
+
+      // 2. Midnight crossover: Wake time 23:50 -> Wake water 00:05
+      final settingsMidnight = ReminderSettings(wakeHour: 23, wakeMinute: 50);
+      final wwMidnight = settingsMidnight.getWakeWaterTime();
+      expect(wwMidnight?.hour, equals(0));
+      expect(wwMidnight?.minute, equals(5));
+
+      // 3. 00:00 valid wake time -> Wake water 00:15
+      final settingsZero = ReminderSettings(wakeHour: 0, wakeMinute: 0);
+      final wwZero = settingsZero.getWakeWaterTime();
+      expect(wwZero?.hour, equals(0));
+      expect(wwZero?.minute, equals(15));
+
+      // 4. Missing wake time -> returns null (no wake water scheduled)
+      final settingsNull = ReminderSettings();
+      expect(settingsNull.getWakeWaterTime(), isNull);
+
+      // 5. Verify literal body text and configuration
+      expect(
+        NotificationContentRegistry.wakeWater.bodyAr,
+        equals('ابدا يومك بشرب المياه درجة حرارتها معتدلة مهمه للمعده و الكبد والكلى.'),
+      );
+      expect(NotificationContentRegistry.wakeWater.channelId, equals(NotificationChannels.waterChannelId));
+      expect(NotificationContentRegistry.wakeWater.soundName, equals(NotificationChannels.waterSound));
+      expect(NotificationContentRegistry.wakeWater.idRangeStart, equals(2500));
     });
   });
 }

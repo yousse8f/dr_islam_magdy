@@ -272,6 +272,23 @@ class NotificationScheduler {
         }
       }
 
+      // 3b. Morning Wake Water (15 minutes after wake-up time)
+      if (settings.waterEnabled && settings.hasWakeTime) {
+        final wwTime = settings.getWakeWaterTime();
+        if (wwTime != null) {
+          await scheduleSingle(
+            id: 2500,
+            title: isArabic ? NotificationContentRegistry.wakeWater.titleAr : NotificationContentRegistry.wakeWater.titleEn,
+            body: isArabic ? NotificationContentRegistry.wakeWater.bodyAr : NotificationContentRegistry.wakeWater.bodyEn,
+            hour: wwTime.hour,
+            minute: wwTime.minute,
+            channelId: NotificationContentRegistry.wakeWater.channelId,
+            soundName: NotificationContentRegistry.wakeWater.soundName,
+            payload: 'water',
+          );
+        }
+      }
+
       // 4. Snack
       final snackInterval = settings.fruitVegIntervalHours < 1 ? 2 : settings.fruitVegIntervalHours;
       if (settings.fruitVegEnabled && settings.hasSelectedWakeAndSleepTimes && snackInterval > 0) {

@@ -84,6 +84,18 @@ class NotificationContentRegistry {
     idRangeEnd: 2999,
   );
 
+  // 5b. Morning Wake Water (Water sound, dedicated ID: 2500)
+  static const wakeWater = NotificationTypeData(
+    titleAr: 'تنبيه المياه 💧',
+    titleEn: 'Time for Water 💧',
+    bodyAr: 'ابدا يومك بشرب المياه درجة حرارتها معتدلة مهمه للمعده و الكبد والكلى.',
+    bodyEn: 'Start your day with a glass of room-temperature water; essential for stomach, liver, and kidneys.',
+    channelId: NotificationChannels.waterChannelId,
+    soundName: NotificationChannels.waterSound,
+    idRangeStart: 2500,
+    idRangeEnd: 2599,
+  );
+
   // 6. Snack (Snack sound, dedicated ID range: 3000..3999)
   static const snack = NotificationTypeData(
     titleAr: 'تنبيه السناك 🍎',

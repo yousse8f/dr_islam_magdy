@@ -115,6 +115,13 @@ class ReminderSettings {
     return mins;
   }
 
+  /// Morning Wake Water: 15 minutes after wake-up time.
+  TimeOfDay? getWakeWaterTime() {
+    if (!hasWakeTime) return null;
+    int wMins = (wakeTotalMins + 15) % 1440;
+    return TimeOfDay(hour: wMins ~/ 60, minute: wMins % 60);
+  }
+
   /// 1. Breakfast: 30 minutes after wake-up time.
   TimeOfDay? getBreakfastTime() {
     if (!hasSelectedWakeAndSleepTimes) return null;
