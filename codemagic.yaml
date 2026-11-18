@@ -15,8 +15,8 @@ workflows:
       vars:
         BUNDLE_ID: "com.neutirition.drEslam"
         APP_ID: "6741872998"
-        BUILD_NAME: "1.1.6"
-        BUILD_NUMBER: "16"
+        BUILD_NAME: "1.1.7"
+        BUILD_NUMBER: "17"
       flutter: 3.47.8
       xcode: latest
       cocoapods: default
