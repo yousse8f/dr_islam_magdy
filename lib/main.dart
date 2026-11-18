@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/navigation/app_navigator.dart';
 import 'core/services/app_config_service.dart';
@@ -96,6 +97,16 @@ class _DrIslamAppState extends State<DrIslamApp> {
       navigatorKey: AppNavigator.navigatorKey,
       title: 'د. إسلام مجدي - Dr. Islam Magdy',
       debugShowCheckedModeBanner: false,
+      locale: const Locale('ar', ''),
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [
+        Locale('ar', ''),
+        Locale('en', ''),
+      ],
       theme: ThemeData(
         useMaterial3: true,
         primaryColor: AppColors.forestGreen,

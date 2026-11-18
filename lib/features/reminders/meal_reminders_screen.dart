@@ -48,15 +48,11 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
     }
   }
 
-  Future<void> _pickTime({required bool isWake}) async {
-    final currentHour = isWake ? _settings.wakeHour : _settings.sleepHour;
-    final currentMinute = isWake ? _settings.wakeMinute : _settings.sleepMinute;
-
-    final initialTime = (currentHour != null && currentMinute != null)
-        ? TimeOfDay(hour: currentHour, minute: currentMinute)
-        : (isWake ? const TimeOfDay(hour: 7, minute: 0) : const TimeOfDay(hour: 23, minute: 0));
-
-    final picked = await showTimePicker(
+  Future<TimeOfDay?> _showArabicTimePicker({
+    required BuildContext context,
+    required TimeOfDay initialTime,
+  }) async {
+    return await showTimePicker(
       context: context,
       initialTime: initialTime,
       builder: (context, child) {
@@ -72,6 +68,20 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
           child: child!,
         );
       },
+    );
+  }
+
+  Future<void> _pickTime({required bool isWake}) async {
+    final currentHour = isWake ? _settings.wakeHour : _settings.sleepHour;
+    final currentMinute = isWake ? _settings.wakeMinute : _settings.sleepMinute;
+
+    final initialTime = (currentHour != null && currentMinute != null)
+        ? TimeOfDay(hour: currentHour, minute: currentMinute)
+        : (isWake ? const TimeOfDay(hour: 7, minute: 0) : const TimeOfDay(hour: 23, minute: 0));
+
+    final picked = await _showArabicTimePicker(
+      context: context,
+      initialTime: initialTime,
     );
 
     if (picked != null) {
@@ -374,7 +384,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                         color: AppColors.forestGreen,
                       ),
                       onTap: () async {
-                        final picked = await showTimePicker(
+                        final picked = await _showArabicTimePicker(
                           context: context,
                           initialTime: selectedTime,
                         );
@@ -1051,7 +1061,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     onToggle: (val) async {
                       setState(() => _settings.workoutEnabled = val);
                       if (val && _settings.workoutHour == null) {
-                        final picked = await showTimePicker(
+                        final picked = await _showArabicTimePicker(
                           context: context,
                           initialTime: const TimeOfDay(hour: 17, minute: 0),
                         );
@@ -1074,7 +1084,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       _settings.workoutMinute,
                     ),
                     onTimeTap: () async {
-                      final picked = await showTimePicker(
+                      final picked = await _showArabicTimePicker(
                         context: context,
                         initialTime: TimeOfDay(
                           hour: _settings.workoutHour ?? 17,
@@ -1105,7 +1115,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     onToggle: (val) async {
                       setState(() => _settings.vitaminsEnabled = val);
                       if (val && _settings.vitaminsHour == null) {
-                        final picked = await showTimePicker(
+                        final picked = await _showArabicTimePicker(
                           context: context,
                           initialTime: const TimeOfDay(hour: 9, minute: 0),
                         );
@@ -1128,7 +1138,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       _settings.vitaminsMinute,
                     ),
                     onTimeTap: () async {
-                      final picked = await showTimePicker(
+                      final picked = await _showArabicTimePicker(
                         context: context,
                         initialTime: TimeOfDay(
                           hour: _settings.vitaminsHour ?? 9,
@@ -1161,7 +1171,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                     onToggle: (val) async {
                       setState(() => _settings.screenOffEnabled = val);
                       if (val && _settings.screenOffHour == null) {
-                        final picked = await showTimePicker(
+                        final picked = await _showArabicTimePicker(
                           context: context,
                           initialTime: const TimeOfDay(hour: 22, minute: 30),
                         );
@@ -1184,7 +1194,7 @@ class _MealRemindersScreenState extends State<MealRemindersScreen> {
                       _settings.screenOffMinute,
                     ),
                     onTimeTap: () async {
-                      final picked = await showTimePicker(
+                      final picked = await _showArabicTimePicker(
                         context: context,
                         initialTime: TimeOfDay(
                           hour: _settings.screenOffHour ?? 22,

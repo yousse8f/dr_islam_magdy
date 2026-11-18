@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/theme/app_colors.dart';
 import 'add_food_screen.dart';
@@ -720,9 +721,9 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
               children: [
                 Text(
                   label,
-                  style: const TextStyle(
+                  style: GoogleFonts.cairo(
                     fontSize: 11,
-                    fontWeight: FontWeight.w600,
+                    fontWeight: FontWeight.w900,
                     color: AppColors.mutedText,
                   ),
                   maxLines: 1,
@@ -731,9 +732,9 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                 const SizedBox(height: 1),
                 Text(
                   value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                  style: GoogleFonts.cairo(
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w900,
                     color: color,
                   ),
                   maxLines: 1,
@@ -741,9 +742,9 @@ class _FoodLogScreenState extends State<FoodLogScreen> {
                 ),
                 Text(
                   sublabel,
-                  style: const TextStyle(
+                  style: GoogleFonts.cairo(
                     fontSize: 9.5,
-                    fontWeight: FontWeight.normal,
+                    fontWeight: FontWeight.w900,
                     color: AppColors.textDark,
                   ),
                   maxLines: 1,
